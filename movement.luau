@@ -119,41 +119,36 @@ function movement.noClip(...)
 end
 
 function movement.getHive(...)
-	local a = {...}
-	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
+	local character = find.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
+	
 	if not humanoid or not honeycombs then
-		return
+		return nil
 	end
-
-	local position = nil
-
+	
 	for _, hive in ipairs(honeycombs:GetChildren()) do
-		local display = hive:FindFirstChild("Display")
-		local gui = display and display:FindFirstChild("Gui")
-		local frame = gui and gui:FindFirstChild("Frame")
-		local name = frame and frame:FindFirstChild("OwnerName")
-
-		if name and name:IsA("TextLabel") then
-			local trimmed = string.match(name.Text, "^%s*(.-)%s*$") or ""
-			if string.lower(trimmed) == string.lower(find.player.Name) then
+		local owner = hive:FindFirstChild("Owner")
+		if owner then
+			local value = owner.Value
+			if value == find.player.Name or value == find.player then
 				local spawnPos = hive:FindFirstChild("SpawnPos")
 				if spawnPos then
 					if spawnPos:IsA("BasePart") then
-						position = spawnPos.Position
+						return spawnPos.Position
 					elseif spawnPos:IsA("CFrameValue") then
-						position = spawnPos.Value.Position
+						return spawnPos.Value.Position
 					elseif spawnPos:IsA("Attachment") then
-						position = spawnPos.WorldPosition
+						return spawnPos.WorldPosition
 					elseif spawnPos:IsA("Vector3Value") then
-						position = spawnPos.Value
+						return spawnPos.Value
 					end
 				end
 			end
 		end
 	end
-
-	return position
+	
+	return nil
 end
 
 function movement.findActivateButton()
@@ -461,14 +456,9 @@ function movement.move(...)
 			
 			local start = tick()
 			while tick() - start < 3 do
-				if not actives["auto_hive"] then
-					actives["move"] = false
-					return false
-				end
-				
 				hivePos = movement.getHive()
+				
 				if hivePos then
-					--print("claimed")
 					break
 				end
 				
