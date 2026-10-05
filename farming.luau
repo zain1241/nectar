@@ -117,60 +117,62 @@ end
 
 function movement.sprinkler(...)
 	local a = {...}
-	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
+	local character = find.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
 	if not humanoid then
 		return
 	end
-	
+
 	if actives["sprinkler"] ~= true or a[1] == nil then
 		return
 	end
-	
+
 	if sprinklerPlace then
 		return
 	end
-	
-	local function getSprinkler(...)
-		local a = {...}
-		if type(stats) ~= "table" then
-			return nil
-		end
-		
-		if type(stats.Sprinklers) == "table" then
-			return stats.Sprinklers
-		end
-		
-		for _, v in pairs(stats) do
-			if type(v) == "table" and type(v.Sprinklers) == "table" then
-				return v.Sprinklers
-			end
-		end
-		
-		return nil
-	end
-	
+
 	local stats = getStats()
-	local sprinklers = getSprinkler(stats)
-	if not sprinklers or next(sprinklers) then
+	if type(stats) ~= "table" then
 		return
 	end
+
+	local sprinklers = nil
+
+	if type(stats.Sprinklers) == "table" then
+		sprinklers = stats.Sprinklers
+	else
+		for _, v in pairs(stats) do
+			if type(v) == "table" and type(v.Sprinklers) == "table" then
+				sprinklers = v.Sprinklers
+				break
+			end
+		end
+	end
 	
+	if sprinklers and next(sprinklers) ~= nil then
+		return
+	end
+
 	sprinklerPlace = true
+
 	task.delay(2, function()
 		sprinklerPlace = false
 	end)
-	
+
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	if not events then
 		return
 	end
-	
-	local comand = events:FindFirstChild("PlayerActivesCommand")
-	if not comand or not comand:IsA("RemoteEvent") then
+
+	local command = events:FindFirstChild("PlayerActivesCommand")
+	if not command or not command:IsA("RemoteEvent") then
 		return
 	end
-	
-	comand:FireServer({Name = "Sprinkler Builder"})
+
+	command:FireServer({
+		Name = "Sprinkler Builder"
+	})
 end
 
 function farming.farm(...)
