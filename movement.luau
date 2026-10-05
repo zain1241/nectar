@@ -353,7 +353,7 @@ function movement.move(...)
 			
 			local dir = a[1] -  rootPart.Position
 			local dist = dir.Magnitude
-			if dist <= 1 or actives["auto_farm"] ~= true then		
+			if dist <= 2 or actives["auto_farm"] ~= true then		
 				humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
 				humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
 				humanoid:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
