@@ -286,9 +286,9 @@ function convert.autoHive(...)
 		targetHiveId = pick.id
 	end
 
-	if targetHiveId then
-		game:GetService("ReplicatedStorage").Events.ClaimHive:FireServer(targetHiveId)
-	end
+	--if targetHiveId then
+	--	game:GetService("ReplicatedStorage").Events.ClaimHive:FireServer(targetHiveId)
+	--end
 
 	if not targetPos then
 		actives["move"] = false
@@ -399,11 +399,28 @@ function convert.convert(...)
 			end)
 			return
 		end
-
-		pcall(function()
-			hiveCommand:FireServer("ToggleHoneyMaking")
-		end)
 	end
+	
+	local ok, err = pcall(function()
+		hiveCommand:FireServer("ToggleHoneyMaking")
+	end)
+	
+	if not ok then
+		actives["convert"] = false
+		actives["move"] = false
+		return
+	end
+	
+	local start = tick()
+	
+	while tick() - start < 3 do
+		if isMakingHoney() then
+			started = true
+			break
+		end
+		
+		task.wait(.1)
+	end	
 	
 	if not started then
 		warn("make honey not started")
