@@ -417,7 +417,7 @@ function movement.move(...)
 		
 		local target = a[3]
 		if typeof(target) ~= "Vector3" then
-			return true
+			return false
 		end
 		
 		local character = find.player.Character
@@ -433,46 +433,48 @@ function movement.move(...)
 		actives["move"] = true
 		actives["convert"] = false
 		
-		fly(target, tonumber(a[2]) or 40, a[3])
+		local hivePos = movement.getHive()
 		
-		if not movement.getHive() then
+		if not hivePos then
+			if a[5] == nil then
+				actives["move"] = false
+				return false
+			end
+			
 			local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 			local claimHive = events and events:FindFirstChild("ClaimHive")
-
-			if claimHive and claimHive:IsA("RemoteEvent") and a[5] ~= nil then
-				claimHive:FireServer(a[5])
-
-				-- Ждём, пока игра реально назначит улей
-				local start = tick()
-
-				while tick() - start < 3 do
-					if movement.getHive() then
-						break
-					end
-
-					if not actives["auto_hive"] then
-						actives["move"] = false
-						return false
-					end
-
-					task.wait(0.1)
+			
+			if not claimHive or not claimHive:IsA("RemoteEvent") then
+				actives["move"] = false
+				return false
+			end
+			
+			claimHive:FireServer(a[5])
+			
+			local start = tick()
+			while tick() - start < 3 do
+				if not actives["auto_hive"] then
+					actives["move"] = false
+					return false
 				end
+				
+				hivePos = movement.getHive()
+				if hivePos then
+					break
+				end
+				
+				task.wait(.1)
+			end
+			
+			if not hivePos then
+				actives["move"] = false
+				return false
 			end
 		end
+		
+		a[3] = hivePos
 
-		-- Теперь летим к своему улью
-		if not actives["auto_hive"] then
-			actives["move"] = false
-			return false
-		end
-
-		local hivePos = movement.getHive()
-
-		if hivePos then
-			target = hivePos
-		end
-
-		fly(target, tonumber(a[2]) or 40, a[3], a[4])
+		fly(target, tonumber(a[2]) or 40, "hive", a[4])
 
 		return true
 		--
