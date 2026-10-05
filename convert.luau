@@ -123,46 +123,37 @@ local function getStats(...)
 	return nil
 end
 
-function convert.getHive(...)
-	local a = {...}
-	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
+function movement.getHive(...)
+	local character = find.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
-	if not humanoid then
-		return
-	end
 	
-	if not honeycombs then
-		return
+	if not humanoid or not honeycombs then
+		return nil
 	end
-	
-	local position = nil
 	
 	for _, hive in ipairs(honeycombs:GetChildren()) do
-		local display = hive:FindFirstChild("Display")
-		local gui = display and display:FindFirstChild("Gui")
-		local frame = gui and gui:FindFirstChild("Frame")
-		local name = frame and frame:FindFirstChild("OwnerName")
-		
-		if name and name:IsA("TextLabel") then
-			local trimmed = string.match(name.Text, "^%s*(.-)%s*$") or ""
-			if string.lower(trimmed) == string.lower(find.player.Name) then
+		local owner = hive:FindFirstChild("Owner")
+		if owner then
+			local value = owner.Value
+			if value == find.player.Name or value == find.player then
 				local spawnPos = hive:FindFirstChild("SpawnPos")
 				if spawnPos then
 					if spawnPos:IsA("BasePart") then
-						position = spawnPos.Position
+						return spawnPos.Position
 					elseif spawnPos:IsA("CFrameValue") then
-						position = spawnPos.Value.Position
+						return spawnPos.Value.Position
 					elseif spawnPos:IsA("Attachment") then
-						position = spawnPos.WorldPosition
+						return spawnPos.WorldPosition
 					elseif spawnPos:IsA("Vector3Value") then
-						position = spawnPos.Value
+						return spawnPos.Value
 					end
 				end
 			end
 		end
 	end
 	
-	return position
+	return nil
 end
 
 function convert.autoHive(...)
@@ -233,11 +224,13 @@ function convert.autoHive(...)
 		local hiveId = hive:FindFirstChild("HiveID")
 		
 		if owner and hiveId then
-			if owner.Value == find.player then
+			local ownerValue = owner.Value
+			
+			if ownerValue == find.player.Name then
 				myHivePos = extractSpawnPos(hive)
 			end
 			
-			if owner.Value == nil then
+			if ownerValue == "" then
 				local pos = extractSpawnPos(hive)
 				if pos then
 					table.insert(freeHives, {hive = hive, name = hive.Name, pos = pos, id = hiveId.Value})
@@ -299,6 +292,19 @@ function convert.autoHive(...)
 
 		targetPos = pick.pos
 		targetHiveId = pick.id
+		
+		local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+		local claimHive = events and events:FindFirstChild("ClaimHive")
+		
+		if targetHiveId and claimHive then
+			local ok, err = pcall(function()
+				claimHive:FireServer(targetHiveId)
+			end)
+			
+			if not ok then
+				return
+			end
+		end
 	end
 
 	--if targetHiveId then
