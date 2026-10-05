@@ -16,6 +16,7 @@ local find = {
 	players = game:GetService("Players");
 	player = game:GetService("Players").LocalPlayer;
 	prerender = game:GetService("RunService").PreRender;
+	contextactionservice = game:GetService("ContextActionService");
 }
 
 local movement = {}
@@ -428,8 +429,8 @@ function movement.move(...)
 			return false
 		end
 		
-		humanoid:MoveTo(root.Position)
-		humanoid:Move(Vector3.zero, false)
+		--humanoid:MoveTo(root.Position)
+		--humanoid:Move(Vector3.zero, false)
 		actives["move"] = true
 		actives["convert"] = false
 		
@@ -444,12 +445,19 @@ function movement.move(...)
 			local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 			local claimHive = events and events:FindFirstChild("ClaimHive")
 			
-			if not claimHive or not claimHive:IsA("RemoteEvent") then
+			if not claimHive then
 				actives["move"] = false
 				return false
 			end
 			
-			claimHive:FireServer(a[5])
+			local ok, err = pcall(function()
+				claimHive:FireServer(a[5])
+			end)
+			
+			if not ok then
+				actives["move"] = false
+				return false
+			end
 			
 			local start = tick()
 			while tick() - start < 3 do
@@ -460,6 +468,7 @@ function movement.move(...)
 				
 				hivePos = movement.getHive()
 				if hivePos then
+					--print("claimed")
 					break
 				end
 				
@@ -472,7 +481,7 @@ function movement.move(...)
 			end
 		end
 		
-		a[3] = hivePos
+		target = hivePos
 
 		fly(target, tonumber(a[2]) or 40, "hive", a[4])
 
