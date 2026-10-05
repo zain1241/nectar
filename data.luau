@@ -41,12 +41,12 @@ data.actives = {
 	walkspeed = 40,
 	
 	--utils
-	auto_hive = false,
+	auto_hive = true,
 	hive_choice = "Random",
 	last_time_convert = 0,
 	
 	--other settings
-	script_name = "Nectar 0001",
+	script_name = "Nectar 0002",
 	position_script = UDim2.new(0.22, 0, 0.5, 0),
 }
 
