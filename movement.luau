@@ -121,7 +121,7 @@ function movement.getHive(...)
 	local a = {...}
 	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
-	if not humanoid or honeycombs then
+	if not humanoid or not honeycombs then
 		return
 	end
 
@@ -155,7 +155,7 @@ function movement.getHive(...)
 	return position
 end
 
-local function findActivateButton()
+function movement.findActivateButton()
 	local pg = find.player.PlayerGui
 	local sg = pg:FindFirstChild("ScreenGui")
 	if sg then
@@ -176,7 +176,7 @@ local function findActivateButton()
 end
 
 local function activateButton(...)
-	local button = findActivateButton()
+	local button = movement.findActivateButton()
 	if not button then
 		warn("ActivateButton not found")
 		return false
@@ -186,7 +186,7 @@ local function activateButton(...)
 	while tick() - waitStart < 3 do
 		if button.Visible and button.AbsoluteSize.X > 0 then break end
 		task.wait(0.05)
-		button = findActivateButton() or button
+		button = movement.findActivateButton() or button
 	end
 
 	local pos = button.AbsolutePosition
@@ -436,35 +436,45 @@ function movement.move(...)
 		fly(target, tonumber(a[2]) or 40, a[3])
 		
 		if not movement.getHive() then
-			task.wait(0.6)
-			local events = game:GetService("ReplicatedStorage"):WaitForChild("Events")
-			local claimHive = events:WaitForChild("ClaimHive")
+			local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+			local claimHive = events and events:FindFirstChild("ClaimHive")
 
-			for _, hive in ipairs(workspace.Honeycombs:GetChildren()) do
-				local owner = hive:FindFirstChild("Owner")
-				local hiveId = hive:FindFirstChild("HiveID")
+			if claimHive and claimHive:IsA("RemoteEvent") and a[5] ~= nil then
+				claimHive:FireServer(a[5])
 
-				if owner and hiveId and owner.Value == nil then
-					claimHive:FireServer(hiveId.Value)
-					break
+				-- Ждём, пока игра реально назначит улей
+				local start = tick()
+
+				while tick() - start < 3 do
+					if movement.getHive() then
+						break
+					end
+
+					if not actives["auto_hive"] then
+						actives["move"] = false
+						return false
+					end
+
+					task.wait(0.1)
 				end
 			end
-			
-			--for _try = 1, 3 do
-			--	activateButton()
-			--	task.wait(0.5)
-			--	if movement.getHive() then break end
-			--end
-			--if not movement.getHive() then
-			--	warn("hive not found 3s")
-			--	actives["move"] = false
-			--	actives["convert"] = false
-			--	return false
-			--end
 		end
-		
-		actives["move"] = true
-		actives["convert"] = true
+
+		-- Теперь летим к своему улью
+		if not actives["auto_hive"] then
+			actives["move"] = false
+			return false
+		end
+
+		local hivePos = movement.getHive()
+
+		if hivePos then
+			target = hivePos
+		end
+
+		fly(target, tonumber(a[2]) or 40, a[3], a[4])
+
+		return true
 		--
 	end
 	
