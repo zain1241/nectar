@@ -248,11 +248,13 @@ function convert.autoHive(...)
 			local isFree = EMPTY[lower] == true or not activeNames[lower]
 			if isFree and lower ~= myName then
 				local pos = extractSpawnPos(hive)
-				if pos then
+				local hiveId = hive:FindFirstChild("HiveID")
+				if pos and hiveId then
 					table.insert(freeHives, {
 						hive = hive,
 						name = hive.Name,
 						pos = pos,
+						id = hiveId.Value,
 					})
 				end
 			end
@@ -294,8 +296,9 @@ function convert.autoHive(...)
 	end
 	
 	movement.move("hive", actives["walkspeed"], targetPos, function()
-		convert.convert()
-	end)
+		task.wait(1)
+		convert.convert() end, targetHiveId
+	)
 end
 
 function convert.get_pollen_info()
