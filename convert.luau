@@ -229,36 +229,52 @@ function convert.autoHive(...)
 	local freeHives = {}   -- { { hive = Instance, name = "Hive1", pos = Vector3 }, ... }
 	
 	for _, hive in ipairs(honeycombs:GetChildren()) do
-		local display = hive:FindFirstChild("Display")
-		local gui = display and display:FindFirstChild("Gui")
-		local frame = gui and gui:FindFirstChild("Frame")
-		local name = frame and frame:FindFirstChild("OwnerName")
-
-		if name and name:IsA("TextLabel") then
-			local trimmed = string.match(name.Text, "^%s*(.-)%s*$") or ""
-			local lower = string.lower(trimmed)
-
-			if lower == myName then
+		local owner = hive:FindFirstChild("Owner")
+		local hiveId = hive:FindFirstChild("HiveID")
+		
+		if owner and hiveId then
+			if owner.Value == find.player then
 				myHivePos = extractSpawnPos(hive)
-				if myHivePos then
-					break
-				end
 			end
-
-			local isFree = EMPTY[lower] == true or not activeNames[lower]
-			if isFree and lower ~= myName then
+			
+			if owner.Value == nil then
 				local pos = extractSpawnPos(hive)
-				local hiveId = hive:FindFirstChild("HiveID")
-				if pos and hiveId then
-					table.insert(freeHives, {
-						hive = hive,
-						name = hive.Name,
-						pos = pos,
-						id = hiveId.Value,
-					})
+				if pos then
+					table.insert(freeHives, {hive = hive, name = hive.Name, pos = pos, id = hiveId.Value})
 				end
 			end
 		end
+		
+		--local display = hive:FindFirstChild("Display")
+		--local gui = display and display:FindFirstChild("Gui")
+		--local frame = gui and gui:FindFirstChild("Frame")
+		--local name = frame and frame:FindFirstChild("OwnerName")
+
+		--if name and name:IsA("TextLabel") then
+		--	local trimmed = string.match(name.Text, "^%s*(.-)%s*$") or ""
+		--	local lower = string.lower(trimmed)
+
+		--	if lower == myName then
+		--		myHivePos = extractSpawnPos(hive)
+		--		if myHivePos then
+		--			break
+		--		end
+		--	end
+
+		--	local isFree = EMPTY[lower] == true or not activeNames[lower]
+		--	if isFree and lower ~= myName then
+		--		local pos = extractSpawnPos(hive)
+		--		local hiveId = hive:FindFirstChild("HiveID")
+		--		if pos and hiveId then
+		--			table.insert(freeHives, {
+		--				hive = hive,
+		--				name = hive.Name,
+		--				pos = pos,
+		--				id = hiveId.Value,
+		--			})
+		--		end
+		--	end
+		--end
 	end
 	
 	local hiveChoice = actives["hive_choice"] or "Random"
@@ -266,7 +282,6 @@ function convert.autoHive(...)
 	local targetHiveId
 
 	if not myHivePos and #freeHives > 0 then
-		local hiveChoice = actives["hive_choice"] or "Random"
 		local pick
 
 		if hiveChoice ~= "Random" then
