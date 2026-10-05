@@ -24,7 +24,7 @@ local find = {
 
 local farming = {}
 local noCollision, field
-local sprinklerPlace = false
+local sprinklerPlace = false; farmingActive = false
 
 local queue = {
 	auto_farm = {},
@@ -230,6 +230,12 @@ function farming.farm(...)
 	end
 
 	local function metod(...)
+		if farmingActive then
+			return
+		end
+		
+		farmingActive = true
+		
 		local character = find.player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -364,7 +370,8 @@ function farming.farm(...)
 			end
 			task.wait()
 		end
-
+		
+		farmingActive = false
 		actives["move"] = false
 	end
 
