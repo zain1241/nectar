@@ -18,6 +18,7 @@ local find = {
 	players = game:GetService("Players");
 	player = game:GetService("Players").LocalPlayer;
 	prerender = game:GetService("RunService").PreRender;
+	contextactionservice = game:GetService("ContextActionService");
 	random = Random.new();
 }
 
@@ -121,58 +122,38 @@ function movement.sprinkler(...)
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
 	if not humanoid then
-		return
+		return false
 	end
 
-	if actives["sprinkler"] ~= true or a[1] == nil then
-		return
+	if actives["sprinkler"] ~= true then
+		return false
 	end
 
 	if sprinklerPlace then
-		return
-	end
-
-	local stats = getStats()
-	if type(stats) ~= "table" then
-		return
-	end
-
-	local sprinklers = nil
-
-	if type(stats.Sprinklers) == "table" then
-		sprinklers = stats.Sprinklers
-	else
-		for _, v in pairs(stats) do
-			if type(v) == "table" and type(v.Sprinklers) == "table" then
-				sprinklers = v.Sprinklers
-				break
-			end
-		end
+		return false
 	end
 	
-	if sprinklers and next(sprinklers) ~= nil then
-		return
+	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+	local command = events:FindFirstChild("PlayerActivesCommand")
+	if not events or not command then
+		return false
 	end
-
+	
 	sprinklerPlace = true
-
-	task.delay(2, function()
+	
+	local ok, err = pcall(function()
+		command:FireServer({Name = "Sprinkler Builder"})
+	end)
+	
+	if not ok then
+		wait(err)
+	end
+	
+	task.delay(1, function()
 		sprinklerPlace = false
 	end)
-
-	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
-	if not events then
-		return
-	end
-
-	local command = events:FindFirstChild("PlayerActivesCommand")
-	if not command or not command:IsA("RemoteEvent") then
-		return
-	end
-
-	command:FireServer({
-		Name = "Sprinkler Builder"
-	})
+	
+	return ok
 end
 
 function farming.farm(...)
