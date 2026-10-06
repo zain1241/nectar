@@ -172,7 +172,7 @@ function farming.farm(...)
 	--farming.noClip(status)
 	
 	local hivePos = mod.convert.getHive()
-	if not hivePos and actives["auto_hive"] then
+	if not hivePos or hivePos == nil and actives["auto_hive"] then
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
