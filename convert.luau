@@ -302,6 +302,8 @@ function convert.get_pollen_info()
 	}
 end
 
+print(1)
+
 function convert.convert(...)
 	local a = {...}
 	
@@ -484,44 +486,58 @@ function convert.convert(...)
 			
 			task.spawn(function()
 				if actives["balloon"] then
-					local function find(...)
-						local a = {...}
+					local function findBalloon()
+						local hiveBalloons = workspace:FindFirstChild("HiveBalloons")
+						if not hiveBalloons then return nil end
+
+						local inner = hiveBalloons:FindFirstChild("HiveBalloons")
+						if not inner then return nil end
+
+						local body = inner:FindFirstChild("HiveBalloonInstance")
+						if not body then return nil end
+
+						local character = find.player.Character
+						local root = character and character.PrimaryPart or character and character:FindFirstChild("HumanoidRootPart")
+						if not root then return nil end
 						
-						local body = workspace:FindFirstChild("HiveBalloons"):FindFirstChild("HiveBalloons"):FindFirstChild("HiveBalloonInstance")
-						
-						for _, container in ipairs(body) do
+						local children = body:IsA("Model") and body:GetChildren() or { body }
+						--local children = body:GetChildren()
+
+						for _, container in ipairs(children) do
 							local b = container:FindFirstChild("BalloonBody")
 							if b and b:IsA("BasePart") and b.Parent then
-								if (b.Position - find.player.Character.PrimaryPart.Position).Magnitude <= 60 then
+								if (b.Position - root.Position).Magnitude <= 60 then
 									return b
 								end
 							end
 						end
+
+						return nil
 					end
-					
+
 					local balloon = nil
 					local start = tick()
-					
+
 					while tick() - start < 10 do
 						if not actives["auto_farm"] then
 							break
 						end
-						
-						balloon = find()
+
+						balloon = findBalloon()
 						if balloon then
 							break
 						end
-						
+
 						task.wait(.5)
 					end
-					
+
 					if balloon then
 						local popStart = tick()
-						local timeout = 600 -- 10 min
+						local timeout = 600
 						while balloon.Parent and actives["auto_farm"] and (tick() - popStart) < timeout do
 							task.wait(.2)
 						end
-						
+
 						if balloon.Parent then
 							warn("convert balloon did not pop in " .. timeout .. "s (timeout)")
 						else
