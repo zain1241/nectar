@@ -389,7 +389,7 @@ function farming.farm(...)
 		
 		local function getPriority(obj)
 			if isBubble(obj) then
-				return tonumber(actives["bubble_priority"]) or 0
+				return (tonumber(actives["bubble_priority"]) or 0) * 0.2
 			end
 
 			local tp = actives["token_priorities"] or {}
@@ -457,10 +457,16 @@ function farming.farm(...)
 
 				if actives["bubble"] then
 					local particles = workspace:FindFirstChild("Particles")
+
 					if particles then
 						for _, v in pairs(particles:GetChildren()) do
 							if v:IsA("BasePart") and isBubble(v) and v.Transparency < 1 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
-								table.insert(queue["tokens"], v)
+
+								local prio = getPriority(v)
+
+								if prio > 0 then
+									table.insert(queue["tokens"], v)
+								end
 							end
 						end
 					end
@@ -530,23 +536,23 @@ function farming.farm(...)
 						break
 					end
 					
-					local targetIsBubble = isBubble(target)
-					local targetDistance = (position - target.Position).Magnitude
+					--local targetIsBubble = isBubble(target)
+					--local targetDistance = (position - target.Position).Magnitude
 
-					if targetIsBubble and targetDistance > 25 then
-						for i = 2, #queue["tokens"] do
-							local candidate = queue["tokens"][i]
+					--if targetIsBubble and targetDistance > 25 then
+					--	for i = 2, #queue["tokens"] do
+					--		local candidate = queue["tokens"][i]
 
-							if not isBubble(candidate) then
-								local distance = (position - candidate.Position).Magnitude
+					--		if not isBubble(candidate) then
+					--			local distance = (position - candidate.Position).Magnitude
 
-								if distance <= 25 then
-									target = candidate
-									break
-								end
-							end
-						end
-					end
+					--			if distance <= 25 then
+					--				target = candidate
+					--				break
+					--			end
+					--		end
+					--	end
+					--end
 
 					local tp = Vector3.new(target.Position.X, root.Position.Y, target.Position.Z)
 					local dist = (tp - root.Position).Magnitude
@@ -678,7 +684,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(44444)
 
 task.spawn(function()
 	task.wait(2)
