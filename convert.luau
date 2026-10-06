@@ -163,6 +163,21 @@ function convert.getHive()
 	return nil, nil
 end
 
+local function waitUntilNear(targetPos, radius, timeout)
+	radius = radius or 10
+	timeout = timeout or 30
+	local deadline = tick() + timeout
+	while tick() < deadline do
+		local c = find.player.Character
+		local root = c and c:FindFirstChild("HumanoidRootPart")
+		if root and (root.Position - targetPos).Magnitude <= radius then
+			return true
+		end
+		task.wait(0.1)
+	end
+	return false
+end
+
 function convert.autoHive(...)
 	if actives["auto_hive"] == false then
 		return
@@ -176,6 +191,8 @@ function convert.autoHive(...)
 	if not humanoid or not root or not honeycombs then
 		return
 	end
+	
+	print("4")
 
 	actives["convert"] = false
 
@@ -184,12 +201,15 @@ function convert.autoHive(...)
 	
 	local hivePos, hiveID = convert.getHive()
 	if hivePos then
+		print(1)
 		movement.move("hive", actives["walkspeed"], hivePos, function()
 			task.wait(1)
 			convert.convert()
 		end, hiveID)
 		return
 	end
+	
+	print(5)
 	
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local claimHive = events and events:FindFirstChild("ClaimHive")
@@ -198,6 +218,8 @@ function convert.autoHive(...)
 		warn("not claimHive")
 		return
 	end
+	
+	print(6)
 
 	local hiveChoice = actives["hive_choice"] or "Random"
 	local targetHiveId
@@ -229,10 +251,15 @@ function convert.autoHive(...)
 		return
 	end
 	
+	print(newPos)
+	
 	movement.move("hive", actives["walkspeed"], newPos, function()
 		task.wait(1)
 		convert.convert()
+		print(7)
 	end, newId)
+	
+	waitUntilNear(newPos, 10, 30)
 end
 
 function convert.get_pollen_info()
