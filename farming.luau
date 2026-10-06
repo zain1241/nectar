@@ -448,22 +448,26 @@ function farming.farm(...)
 		end
 	end
 	
-	mod.movement.move("go_to_field", walkspeed, field, function()
-		if not actives["auto_farm"] then
-			return
-		end
-		if not actives["move"] then
-			task.spawn(metod)
-		end
-		
-		if actives["sprinkler"] then
-			movement.sprinkler(true)
-		end
-		
-		--if actives["honey_mask"] then
-		--	mod.convert.honey_mask()
-		--end
-	end) -- go to field
+	if hivePos then
+		print(432)
+		mod.movement.move("go_to_field", walkspeed, field, function()
+			print(123)
+			if not actives["auto_farm"] then
+				return
+			end
+			if not actives["move"] then
+				task.spawn(metod)
+			end
+
+			if actives["sprinkler"] then
+				movement.sprinkler(true)
+			end
+
+			--if actives["honey_mask"] then
+			--	mod.convert.honey_mask()
+			--end
+		end) -- go to field
+	end
 end
 
 return farming
