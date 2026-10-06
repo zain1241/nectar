@@ -170,6 +170,8 @@ data.actives = {
 	--field
 	bubble = false,
 	bubble_priority = 1,
+	no_priotiy_field = false,
+	no_priority_drops = false,
 	
 	--converting honey
 	honey_mask = false,
