@@ -610,7 +610,7 @@ function farming.farm(...)
 			
 			if actives["mask"] ~= "None" then
 				local mask = actives["mask"]
-				convert.equip_mask(mask)
+				mod.convert.equip_mask(mask)
 			end
 
 			if actives["sprinkler"] then
