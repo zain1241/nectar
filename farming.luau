@@ -156,6 +156,45 @@ function movement.sprinkler(...)
 	return ok
 end
 
+function movement.getHive()
+	local character = find.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local honeycombs = workspace:FindFirstChild("Honeycombs")
+
+	if not humanoid or not honeycombs then
+		return nil, nil
+	end
+
+	for _, hive in ipairs(honeycombs:GetChildren()) do
+		local owner = hive:FindFirstChild("Owner")
+		if owner then
+			local value = owner.Value
+			if value == find.player.Name or value == find.player then
+				local spawnPos = hive:FindFirstChild("SpawnPos")
+				local hiveID = hive:FindFirstChild("HiveID")
+
+				local pos = nil
+				if spawnPos then
+					if spawnPos:IsA("BasePart") then
+						pos = spawnPos.Position
+					elseif spawnPos:IsA("CFrameValue") then
+						pos = spawnPos.Value.Position
+					elseif spawnPos:IsA("Attachment") then
+						pos = spawnPos.WorldPosition
+					elseif spawnPos:IsA("Vector3Value") then
+						pos = spawnPos.Value
+					end
+				end
+
+				local id = hiveID and hiveID.Value or nil
+				return pos, id
+			end
+		end
+	end
+
+	return nil, nil
+end
+
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
@@ -171,7 +210,7 @@ function farming.farm(...)
 	
 	--farming.noClip(status)
 	
-	local hivePos, hiveId = mod.convert.getHive()
+	local hivePos, hiveId = movement.getHive()
 	if not hivePos and actives["auto_hive"] then
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
