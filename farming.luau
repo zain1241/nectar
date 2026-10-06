@@ -301,7 +301,7 @@ function farming.farm(...)
 	--farming.noClip(status)
 	
 	local hivePos, hiveId = farming.getHive()
-	print(hivePos, hiveId, "423")
+	--print(hivePos, hiveId, "423")
 	if hivePos == nil and hiveId == nil then
 		print(hivePos, hiveId)
 		mod.convert.autoHive()
@@ -389,7 +389,7 @@ function farming.farm(...)
 		
 		local function getPriority(obj)
 			if isBubble(obj) then
-				return tonumber(actives["bubble_priority"]) or 49
+				return tonumber(actives["bubble_priority"]) or 1
 			end
 			local tp = actives["token_priorities"] or {}
 			local dp = actives["drops_priorities"] or {}
@@ -489,7 +489,18 @@ function farming.farm(...)
 				
 				local position = root.Position
 				local speed = removeTable.speed or actives["walkspeed"]
+				--table.sort(queue["tokens"], function(x, y)
+				--	local px, py = getPriority(x), getPriority(y)
+				--	if px ~= py then
+				--		return px > py
+				--	end
+				--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
+				--end)
 				table.sort(queue["tokens"], function(x, y)
+					local bx, by = isBubble(x), isBubble(y)
+					if bx ~= by then
+						return by
+					end
 					local px, py = getPriority(x), getPriority(y)
 					if px ~= py then
 						return px > py
