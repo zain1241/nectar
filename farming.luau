@@ -223,6 +223,11 @@ function farming.dig(...)
 		return
 	end
 	
+	if dig then
+		dig:Disconnect()
+		dig = nil
+	end
+	
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local collect = events and events:FindFirstChild("ToolCollect")
 	if not collect or not collect:IsA("RemoteEvent") then
@@ -539,7 +544,7 @@ task.spawn(function()
 	end
 	
 	if actives["dig"] then
-		farming.dig()
+		farming.dig(true)
 	end
 	
 end)
@@ -554,7 +559,7 @@ local function respawn(...)
 		end
 		
 		if actives["dig"] then
-			farming.dig()
+			farming.dig(true)
 		end
 	end
 end
