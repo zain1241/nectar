@@ -176,6 +176,8 @@ function convert.autoHive(...)
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
+	
+	print(534534)
 
 	if not humanoid or not root or not honeycombs then
 		return
