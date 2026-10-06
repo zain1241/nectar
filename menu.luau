@@ -1759,6 +1759,7 @@ function menu.dop_create()
 					items = {
 						{ type = "button", text = "Auto Farm", key = "auto_farm", callback = farming.farm },
 						{ type = "button", text = "Sprinker", key = "sprinkler", callback = farming.farm },
+						{ type = "button", text = "Tool", key = "dig", callback = farming.dig },
 						{
 							type = "addlistchose",
 							text = "Field",
@@ -1780,6 +1781,15 @@ function menu.dop_create()
 					--
 					items = {
 						{ type = "button", text = "Honey Mask", key = "honey_mask" },
+						{ type = "button", text = "balloon", key = "balloon" },
+						{
+							type = "slider",
+							text = "Backpack %(MAX)",
+							key = "backpack",
+							min = 10,
+							max = 100,
+							step = 1,
+						},
 						--{
 						--	type = "addlistchose",
 						--	text = "Field",
