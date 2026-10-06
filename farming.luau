@@ -23,7 +23,7 @@ local find = {
 }
 
 local farming = {}
-local noCollision, field, dig
+local noCollision, field, dig, walkSpeedLock
 local sprinklerPlace = false; farmingActive = false
 
 local queue = {
@@ -250,6 +250,35 @@ function farming.dig(...)
 	)
 end
 
+function farming.lockWalkSpeed()
+	if walkSpeedLock then
+		walkSpeedLock:Disconnect()
+		walkSpeedLock = nil
+	end
+
+	walkSpeedLock = movement.conAF(
+		find.prerender, 4,
+		function()
+			if not actives["auto_farm"] then
+				if walkSpeedLock then
+					walkSpeedLock:Disconnect()
+					walkSpeedLock = nil
+				end
+				return
+			end
+
+			local character = find.player.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if not humanoid then return end
+
+			local want = actives["walkspeed"] or 16
+			if humanoid.WalkSpeed ~= want then
+				humanoid.WalkSpeed = want
+			end
+		end
+	)
+end
+
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
@@ -439,8 +468,7 @@ function farming.farm(...)
 						table.remove(queue["tokens"], 1)
 						continue
 					end
-
-					humanoid.WalkSpeed = speed
+					
 					humanoid:MoveTo(tp)
 					task.wait()
 				end
@@ -475,7 +503,6 @@ function farming.farm(...)
 							end
 
 							if humanoid then
-								humanoid.WalkSpeed = removeTable.speed
 								humanoid:MoveTo(flat)
 								task.wait()
 							end
@@ -526,6 +553,7 @@ function farming.farm(...)
 	end
 	
 	if hivePos ~= nil then
+		farming.lockWalkSpeed()
 		mod.movement.move("go_to_field", walkspeed, field, function()
 			if not actives["auto_farm"] then
 				return
@@ -574,6 +602,7 @@ local function respawn(...)
 		table.clear(queue["dig"])
 		
 		if actives["auto_farm"] then
+			farming.lockWalkSpeed()
 			farming.farm()
 		end
 		
