@@ -163,7 +163,7 @@ function convert.getHive()
 	return nil, nil
 end
 
-print("load4")
+print("load5")
 
 local function isHiveFree(hiveId)
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
@@ -416,7 +416,7 @@ function convert.convert(...)
 	local startTime = tick()
 	local pollenZeroSince = nil
 	
-	aconvert = farming.conAF(
+	aconvert = convert.conAF(
 		find.prerender,
 		4,
 		function(delta)
