@@ -416,7 +416,7 @@ function farming.farm(...)
 					categoryPrio = 100
 				end
 			else
-				if not actives["no_priority_field"] then
+				if not actives["no_priotiy_tokens"] then
 					categoryPrio = 200
 				end
 			end
