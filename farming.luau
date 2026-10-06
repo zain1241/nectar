@@ -226,6 +226,7 @@ function farming.farm(...)
 	--farming.noClip(status)
 	
 	local hivePos, hiveId = movement.getHive()
+	print(hivePos, hiveId, "423")
 	if not hivePos and actives["auto_hive"] then
 		print(hivePos, hiveId)
 		mod.convert.autoHive()
