@@ -599,7 +599,7 @@ local function respawn(...)
 		actives["move"] = false
 		
 		table.clear(queue["auto_farm"])
-		table.clear(queue["dig"])
+		table.clear(queue["tokens"])
 		
 		if actives["auto_farm"] then
 			farming.lockWalkSpeed()
