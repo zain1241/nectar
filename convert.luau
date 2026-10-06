@@ -53,6 +53,10 @@ function convert.noClip(...)
 	}
 
 	if a[1] then
+		if noCollision then
+			noCollision:Disconnect()
+			noCollision = nil
+		end
 		noCollision = convert.conAF(
 			find.prerender, 4,
 			function()
