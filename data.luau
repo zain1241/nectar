@@ -169,7 +169,7 @@ data.actives = {
 	
 	--field
 	bubble = false,
-	bubble_priority = 50,
+	bubble_priority = 29,
 	
 	--converting honey
 	honey_mask = false,
