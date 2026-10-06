@@ -495,14 +495,30 @@ function convert.convert(...)
 						local root = character and (character.PrimaryPart or character:FindFirstChild("HumanoidRootPart"))
 						if not root then return nil end
 						
+						local function getPart(inst)
+							local body = inst:FindFirstChild("BalloonBody")
+							if not body then return nil end
+
+							if body:IsA("BasePart") then
+								return body
+							end
+
+							if body:IsA("Model") then
+								return body.PrimaryPart
+									or body:FindFirstChildWhichIsA("BasePart")
+							end
+
+							return nil
+						end
+						
 						local best, bestDist
 						for _, inst in ipairs(hiveBalloons:GetChildren()) do
 							if inst.Name == "HiveBalloonInstance" then
-								local body = inst:FindFirstChild("BalloonBody")
-								if body and body:IsA("BasePart") and body.Parent then
-									local d = (body.Position - root.Position).Magnitude
+								local part = getPart(inst)
+								if part and part.Parent then
+									local d = (part.Position - root.Position).Magnitude
 									if d <= 60 and (not bestDist or d < bestDist) then
-										best, bestDist = body, d
+										best, bestDist = part, d
 									end
 								end
 							end
