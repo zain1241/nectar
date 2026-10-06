@@ -210,6 +210,8 @@ local function waitUntilNear(targetPos, radius, timeout)
 	return false
 end
 
+print("load")
+
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
