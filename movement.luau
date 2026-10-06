@@ -255,6 +255,15 @@ local function activateButton(...)
 	return true
 end
 
+function movement.stop()
+	if move then
+		move:Disconnect()
+		move = nil
+	end
+	movement.noClip(false)
+	actives["move"] = false
+end
+
 function movement.move(...)
 	local a = {...}
 	
@@ -299,6 +308,11 @@ function movement.move(...)
 	end
 	
 	local function fly(...)
+		if move then
+			move:Disconnect()
+			move = nil
+		end
+		
 		local a = {...}
 		if not find.player.Character:WaitForChild("Humanoid") then
 			return
