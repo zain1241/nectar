@@ -21,6 +21,7 @@ local find = {
 
 local movement = {}
 local move, noCollision
+local noclipEnabled = false
 
 function movement.conAF(...)
 	local a = {...}
@@ -81,43 +82,39 @@ function movement.control(...)
 end
 
 function movement.noClip(...)
-	local a = {...}
-	
-	local parts = {
-		HumanoidRootPart = true,
-		UpperTorso = true,
-		LowerTorso = true,
-	}
-	
-	if a[1] then
-		if noCollision then
-			noCollision:Disconnect()
-			noCollision = nil
-		end
-		noCollision = find.prerender:Connect(function()
-			local c = find.player.Character
-			if not c then return end
-			for _, v in ipairs(c:GetDescendants()) do
-				if parts[v.Name] and v:IsA("BasePart") then
-					if v.CanCollide then
-						v.CanCollide = false
-					end
-				end
-			end
-		end)
-	else
-		if noCollision then
-			noCollision:Disconnect()
-			noCollision = nil
-		end
+	local enabled = (...) == true
+
+	noclipEnabled = enabled
+
+	if noCollision then
+		noCollision:Disconnect()
+		noCollision = nil
+	end
+
+	local function update()
 		local character = find.player.Character
-		if character then
-			for _, v in ipairs(character:GetChildren()) do
-				if parts[v.Name] and v:IsA("BasePart") then
-					v.CanCollide = true
-				end
-			end
+		if not character then
+			return
 		end
+
+		for _, part in ipairs(character:GetDescendants()) do
+			if not part:IsA("BasePart") then
+				continue
+			end
+			
+			if part:FindFirstAncestorOfClass("Accessory")
+				or part:FindFirstAncestorOfClass("Tool") then
+				continue
+			end
+
+			part.CanCollide = not enabled
+		end
+	end
+
+	update()
+
+	if enabled then
+		noCollision = find.prerender:Connect(update)
 	end
 end
 
