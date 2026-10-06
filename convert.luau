@@ -20,6 +20,7 @@ local find = {
 	player = game:GetService("Players").LocalPlayer;
 	prerender = game:GetService("RunService").PreRender;
 	contextactionservice = game:GetService("ContextActionService");
+	random = Random.new();
 }
 
 local convert = {}
@@ -123,203 +124,118 @@ local function getStats(...)
 	return nil
 end
 
-function convert.getHive(...)
+local function getHive()
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
-	
+
 	if not humanoid or not honeycombs then
-		return nil
+		return nil, nil
 	end
-	
+
 	for _, hive in ipairs(honeycombs:GetChildren()) do
 		local owner = hive:FindFirstChild("Owner")
 		if owner then
 			local value = owner.Value
 			if value == find.player.Name or value == find.player then
 				local spawnPos = hive:FindFirstChild("SpawnPos")
+				local hiveID = hive:FindFirstChild("HiveID")
+
+				local pos = nil
 				if spawnPos then
 					if spawnPos:IsA("BasePart") then
-						return spawnPos.Position
+						pos = spawnPos.Position
 					elseif spawnPos:IsA("CFrameValue") then
-						return spawnPos.Value.Position
+						pos = spawnPos.Value.Position
 					elseif spawnPos:IsA("Attachment") then
-						return spawnPos.WorldPosition
+						pos = spawnPos.WorldPosition
 					elseif spawnPos:IsA("Vector3Value") then
-						return spawnPos.Value
+						pos = spawnPos.Value
 					end
 				end
+
+				local id = hiveID and hiveID.Value or nil
+				return pos, id
 			end
 		end
 	end
-	
-	return nil
+
+	return nil, nil
 end
 
 function convert.autoHive(...)
-	local a = {...}
-	
 	if actives["auto_hive"] == false then
 		return
 	end
-	
-	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
-	local root = find.player.Character:FindFirstChild("HumanoidRootPart")
+
+	local character = find.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
-	if not humanoid or not root then
+
+	if not humanoid or not root or not honeycombs then
 		return
 	end
-	
-	if not honeycombs then
-		return
-	end
-	
-	--if actives["auto_farm"] then
-	--	actives["auto_farm"] = false
-	--end
-	
-	--table.clear(a[1])
-	--table.clear(a[2])
-	
+
 	actives["convert"] = false
-	
+
 	convert.noClip(false)
 	convert.control(false)
 	
-	local activeNames = {}
-	for _, p in ipairs(find.players:GetPlayers()) do
-		activeNames[string.lower(p.Name)] = true
-	end
-
-	local myName = string.lower(find.player.Name)
-	
-	local EMPTY = {[""] = true, [" "] = true, ["-"] = true, ["--"] = true, ["—"] = true, ["none"] = true, ["empty"] = true, ["free"] = true, ["n/a"] = true}
-	
-	local function extractSpawnPos(container)
-		local sp = container:FindFirstChild("SpawnPos")
-		if not sp then
-			return nil
-		end
-		
-		if sp:IsA("BasePart") then
-			return sp.Position
-		end
-		if sp:IsA("CFrameValue") then
-			return sp.Value.Position
-		end
-		if sp:IsA("Attachment") then
-			return sp.WorldPosition
-		end
-		if sp:IsA("Vector3Value") then
-			return sp.Value
-		end
-		return nil
-	end
-	
-	local myHivePos = nil
-	local freeHives = {}   -- { { hive = Instance, name = "Hive1", pos = Vector3 }, ... }
-	
-	for _, hive in ipairs(honeycombs:GetChildren()) do
-		local owner = hive:FindFirstChild("Owner")
-		local hiveId = hive:FindFirstChild("HiveID")
-		
-		if owner and hiveId then
-			local ownerValue = owner.Value
-			
-			if ownerValue == find.player.Name then
-				myHivePos = extractSpawnPos(hive)
-			end
-			
-			if ownerValue == "" then
-				local pos = extractSpawnPos(hive)
-				if pos then
-					table.insert(freeHives, {hive = hive, name = hive.Name, pos = pos, id = hiveId.Value})
-				end
-			end
-		end
-		
-		--local display = hive:FindFirstChild("Display")
-		--local gui = display and display:FindFirstChild("Gui")
-		--local frame = gui and gui:FindFirstChild("Frame")
-		--local name = frame and frame:FindFirstChild("OwnerName")
-
-		--if name and name:IsA("TextLabel") then
-		--	local trimmed = string.match(name.Text, "^%s*(.-)%s*$") or ""
-		--	local lower = string.lower(trimmed)
-
-		--	if lower == myName then
-		--		myHivePos = extractSpawnPos(hive)
-		--		if myHivePos then
-		--			break
-		--		end
-		--	end
-
-		--	local isFree = EMPTY[lower] == true or not activeNames[lower]
-		--	if isFree and lower ~= myName then
-		--		local pos = extractSpawnPos(hive)
-		--		local hiveId = hive:FindFirstChild("HiveID")
-		--		if pos and hiveId then
-		--			table.insert(freeHives, {
-		--				hive = hive,
-		--				name = hive.Name,
-		--				pos = pos,
-		--				id = hiveId.Value,
-		--			})
-		--		end
-		--	end
-		--end
-	end
-	
-	local hiveChoice = actives["hive_choice"] or "Random"
-	local targetPos = myHivePos
-	local targetHiveId
-
-	if not myHivePos and #freeHives > 0 then
-		local pick
-
-		if hiveChoice ~= "Random" then
-			for _, entry in ipairs(freeHives) do
-				if entry.name == hiveChoice then
-					pick = entry
-					break
-				end
-			end
-		end
-
-		if not pick then
-			pick = freeHives[find.random:NextInteger(1, #freeHives)]
-		end
-
-		targetPos = pick.pos
-		targetHiveId = pick.id
-		
-		local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
-		local claimHive = events and events:FindFirstChild("ClaimHive")
-		
-		if targetHiveId and claimHive then
-			local ok, err = pcall(function()
-				claimHive:FireServer(targetHiveId)
-			end)
-			
-			if not ok then
-				return
-			end
-		end
-	end
-
-	--if targetHiveId then
-	--	game:GetService("ReplicatedStorage").Events.ClaimHive:FireServer(targetHiveId)
-	--end
-
-	if not targetPos then
-		actives["move"] = false
+	local hivePos, hiveID = getHive()
+	if hivePos then
+		movement.move("hive", actives["walkspeed"], hivePos, function()
+			task.wait(1)
+			convert.convert()
+		end, hiveID)
 		return
 	end
 	
-	movement.move("hive", actives["walkspeed"], targetPos, function()
+	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+	local claimHive = events and events:FindFirstChild("ClaimHive")
+
+	if not claimHive then
+		warn("not claimHive")
+		return
+	end
+
+	local hiveChoice = actives["hive_choice"] or "Random"
+	local targetHiveId
+
+	if hiveChoice == "Random" then
+		targetHiveId = find.random:NextInteger(1, 6)
+	else
+		targetHiveId = tonumber(tostring(hiveChoice):match("%d+"))
+			or find.random:NextInteger(1, 6)
+	end
+
+	local ok, err = pcall(function()
+		claimHive:FireServer(targetHiveId)
+	end)
+
+	if not ok then
+		warn("claimHive failed:", err)
+		return
+	end
+	
+	local newPos, newId
+	for _ = 1, 20 do
+		task.wait(0.25)
+		newPos, newId = getHive()
+		if newPos then
+			break
+		end
+	end
+
+	if not newPos then
+		warn("not hive (id:", targetHiveId, ")")
+		return
+	end
+	
+	movement.move("hive", actives["walkspeed"], newPos, function()
 		task.wait(1)
-		convert.convert() end, targetHiveId
-	)
+		convert.convert()
+	end, newId)
 end
 
 function convert.get_pollen_info()
@@ -506,6 +422,7 @@ function convert.convert(...)
 			local pollen = getPollen()
 
 			if pollen == nil then
+				pollenZeroSince = nil
 				return
 			end
 
@@ -519,7 +436,7 @@ function convert.convert(...)
 				return
 			end
 
-			if tick() - pollenZeroSince < 2 then
+			if tick() - pollenZeroSince < 3 then
 				return
 			end
 
