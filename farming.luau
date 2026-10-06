@@ -227,7 +227,7 @@ function farming.farm(...)
 	
 	local hivePos, hiveId = movement.getHive()
 	print(hivePos, hiveId, "423")
-	if not hivePos and actives["auto_hive"] then
+	if hivePos == nil and actives["auto_hive"] then
 		print(hivePos, hiveId)
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
