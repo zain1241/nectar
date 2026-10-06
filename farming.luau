@@ -62,6 +62,10 @@ function farming.noClip(...)
 	}
 
 	if a[1] then
+		if noCollision then
+			noCollision:Disconnect()
+			noCollision = nil
+		end
 		noCollision = movement.conAF(
 			find.prerender, 4,
 			function()
@@ -337,13 +341,24 @@ function farming.farm(...)
 			local s = field.Size / 2
 			return math.abs(p.X) <= s.X and math.abs(p.Z) <= s.Z and p.Y >= -3 and p.Y <= 15
 		end
-
+		
+		local lastField = nil
 		while actives["auto_farm"] == true do
 			local zones = workspace:FindFirstChild("FlowerZones")
 			if actives["field"] == "" or actives["field"] == false or actives["field"] == nil then
 				field = nil
 			else
 				field = zones:FindFirstChild(actives["field"])
+			end
+			
+			if actives["field"] ~= lastField then
+				lastField = actives["field"]
+				table.clear(queue["auto_farm"])
+				table.clear(queue["tokens"])
+			end
+			
+			if not field then
+				continue
 			end
 			
 			if #queue["auto_farm"] == 0 then
@@ -367,7 +382,7 @@ function farming.farm(...)
 			if collectibles and field then
 				if root then
 					for _, v in pairs(collectibles:GetChildren()) do
-						if v:IsA("BasePart") and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+						if v:IsA("BasePart") and field and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
 							table.insert(queue["tokens"], v)
 						end
 					end
@@ -430,7 +445,7 @@ function farming.farm(...)
 							local hasToken = false
 							if collectibles and field then
 								for _, v in pairs(collectibles:GetChildren()) do
-									if v:IsA("BasePart") and isTokenInField(v, field) then
+									if v:IsA("BasePart") and field and isTokenInField(v, field) then
 										hasToken = true
 										break
 									end
