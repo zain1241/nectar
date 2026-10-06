@@ -518,7 +518,7 @@ function convert.convert(...)
 					local balloon = nil
 					local start = tick()
 
-					while tick() - start < 10 do
+					while tick() - start < 3 do
 						if not actives["auto_farm"] then
 							break
 						end
@@ -567,7 +567,7 @@ function convert.convert(...)
 end
 
 function convert.equip_mask(name)
-	print(2)
+	--print(2)
 	
 	if type(name) ~= "string" or name == "" or name == "None" then
 		return false
