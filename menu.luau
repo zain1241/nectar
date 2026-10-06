@@ -1333,9 +1333,10 @@ function menu.dop_create()
 		end
 
 		for _, v in ipairs(list) do
-			local name = type(v) == "table" and v.name or v
+			local name  = type(v) == "table" and v.name or v
+			local prio  = type(v) == "table" and tonumber(v.priority) or nil
 			if type(name) == "string" and name ~= "" and priorities[name] == nil then
-				priorities[name] = defaultPriority
+				priorities[name] = prio or defaultPriority
 			end
 		end
 
@@ -1776,18 +1777,92 @@ function menu.dop_create()
 				},
 				{
 					--settings
+					name = "Field",
+					opened = true,
+					items = {
+						{ type = "button", text = "Bubble", key = "bubble", callback = farming.farm },
+
+						{
+							type = "addlistchose",
+							text = "Farm In",
+							key = "position_field",
+							list = mod.data.positions,
+							allow_none = false,
+							header_icon = true,
+							changed = function()
+								if actives["auto_farm"] then
+									mod.farming.farm()
+								end
+							end,
+						},
+
+						{
+							type = "tokenpriority",
+							text = "Token Priority",
+							key = "token_priorities",
+							list = mod.data.token_priorities,
+							opened = false,
+							changed = function()
+								if mod.data.actives.auto_farm then
+									if mod.farming._prioDebounce then
+										task.cancel(mod.farming._prioDebounce)
+									end
+									mod.farming._prioDebounce = task.delay(0.5, function()
+										mod.farming.farm()
+									end)
+								end
+							end,
+						},
+
+						{
+							type = "tokenpriority",
+							text = "Drops Priority",
+							key = "drops_priorities",
+							list = mod.data.drops_priorities,
+							opened = false,
+							changed = function()
+								if mod.data.actives.auto_farm then
+									if mod.farming._prioDebounce then
+										task.cancel(mod.farming._prioDebounce)
+									end
+									mod.farming._prioDebounce = task.delay(0.5, function()
+										mod.farming.farm()
+									end)
+								end
+							end,
+						},
+					},
+				},
+				{
+					--settings
 					name = "Convert Honey",
 					opened = true,
 					--
 					items = {
 						{ type = "button", text = "Honey Mask", key = "honey_mask" },
-						{ type = "button", text = "balloon", key = "balloon" },
+						{ type = "button", text = "Balloon", key = "balloon" },
+						{
+							type = "addlistchose",
+							text = "Standart Mask",
+							key = "mask",
+							list = mod.data.mask,
+							allow_none = false,
+							header_icon = true,
+						},
 						{
 							type = "slider",
 							text = "Backpack %(MAX)",
 							key = "backpack",
 							min = 10,
 							max = 100,
+							step = 1,
+						},
+						{
+							type = "slider",
+							text = "Auto Convert(Minutes)",
+							key = "convert_interval",
+							min = 1,
+							max = 120,
 							step = 1,
 						},
 						--{
