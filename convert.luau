@@ -163,10 +163,14 @@ function convert.getHive()
 	return nil, nil
 end
 
+print("load3")
+
 function convert.autoHive(...)
+	print(222)
 	if actives["auto_hive"] == false then
 		return
 	end
+	print(333)
 
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
