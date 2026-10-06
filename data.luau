@@ -133,8 +133,8 @@ data.drops_priorities = {
 
 	-- normal drops
 	{ name = "Honey Drop",        image = "rbxassetid://1472108387", priority = 29  },
-	{ name = "Royal Jelly",       image = "rbxassetid://1471882621", priority = 29  },
-	{ name = "Treat",             image = "rbxassetid://2028574353", priority = 29  },
+	{ name = "Royal Jelly",       image = "rbxassetid://1471882621", priority = 0  },
+	{ name = "Treat",             image = "rbxassetid://2028574353", priority = 0  },
 	{ name = "Ant Pass",          image = "rbxassetid://2060626811", priority = 29  },
 	{ name = "Spike",             image = "rbxassetid://2314214749", priority = 29  },
 	{ name = "Micro Converter",   image = "rbxassetid://2863122826", priority = 29  },
@@ -143,7 +143,7 @@ data.drops_priorities = {
 	{ name = "Cloud Vial",        image = "rbxassetid://3030569073", priority = 29  },
 	{ name = "Honey Suckle",      image = "rbxassetid://8277901755", priority = 29  },
 	{ name = "Whirligig",         image = "rbxassetid://8277898895", priority = 29  },
-	{ name = "Honey Token",       image = "rbxassetid://1472135114", priority = 1 }
+	{ name = "Honey Token",       image = "rbxassetid://1472135114", priority = 0 }
 }
 
 --name -> { image, priority }
@@ -184,6 +184,7 @@ data.actives = {
 	
 	--utils
 	auto_hive = true,
+	fast_run = true,
 	hive_choice = "Random",
 	last_time_convert = 0,
 	
