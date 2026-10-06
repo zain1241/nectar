@@ -143,6 +143,7 @@ data.drops_priorities = {
 	{ name = "Cloud Vial",        image = "rbxassetid://3030569073", priority = 29  },
 	{ name = "Honey Suckle",      image = "rbxassetid://8277901755", priority = 29  },
 	{ name = "Whirligig",         image = "rbxassetid://8277898895", priority = 29  },
+	{ name = "Honey Token",       image = "rbxassetid://1472135114", priority = 1 }
 }
 
 --name -> { image, priority }
