@@ -487,32 +487,30 @@ function convert.convert(...)
 			task.spawn(function()
 				if actives["balloon"] then
 					local function findBalloon()
-						local hiveBalloons = workspace:FindFirstChild("HiveBalloons")
+						local balloons = workspace:FindFirstChild("Balloons")
+						if not balloons then return nil end
+
+						local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
 						if not hiveBalloons then return nil end
 
-						local inner = hiveBalloons:FindFirstChild("HiveBalloons")
-						if not inner then return nil end
-
-						local body = inner:FindFirstChild("HiveBalloonInstance")
-						if not body then return nil end
-
 						local character = find.player.Character
-						local root = character and character.PrimaryPart or character and character:FindFirstChild("HumanoidRootPart")
+						local root = character and (character.PrimaryPart or character:FindFirstChild("HumanoidRootPart"))
 						if not root then return nil end
 						
-						local children = body:IsA("Model") and body:GetChildren() or { body }
-						--local children = body:GetChildren()
-
-						for _, container in ipairs(children) do
-							local b = container:FindFirstChild("BalloonBody")
-							if b and b:IsA("BasePart") and b.Parent then
-								if (b.Position - root.Position).Magnitude <= 60 then
-									return b
+						local best, bestDist
+						for _, inst in ipairs(hiveBalloons:GetChildren()) do
+							if inst.Name == "HiveBalloonInstance" then
+								local body = inst:FindFirstChild("BalloonBody")
+								if body and body:IsA("BasePart") and body.Parent then
+									local d = (body.Position - root.Position).Magnitude
+									if d <= 60 and (not bestDist or d < bestDist) then
+										best, bestDist = body, d
+									end
 								end
 							end
 						end
 
-						return nil
+						return best
 					end
 
 					local balloon = nil
