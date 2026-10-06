@@ -124,7 +124,7 @@ local function getStats(...)
 	return nil
 end
 
-local function getHive()
+function convert.getHive()
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
@@ -182,7 +182,7 @@ function convert.autoHive(...)
 	convert.noClip(false)
 	convert.control(false)
 	
-	local hivePos, hiveID = getHive()
+	local hivePos, hiveID = convert.getHive()
 	if hivePos then
 		movement.move("hive", actives["walkspeed"], hivePos, function()
 			task.wait(1)
@@ -218,7 +218,7 @@ function convert.autoHive(...)
 	local newPos, newId
 	for _ = 1, 20 do
 		task.wait(0.25)
-		newPos, newId = getHive()
+		newPos, newId = convert.getHive()
 		if newPos then
 			break
 		end
