@@ -52,11 +52,11 @@ function movement.jump(...)
 		humanoid:ChangeState(Enum.HumanoidStateType.None)
 		task.wait(.01)
 		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
-		print(1)
+		--print(1)
 	else
 		humanoid.Jump = false
 		humanoid:ChangeState(Enum.HumanoidStateType.None)
-		print(2)
+		--print(2)
 	end
 end
 
