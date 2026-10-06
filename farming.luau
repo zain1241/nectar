@@ -25,6 +25,7 @@ local find = {
 local farming = {}
 local noCollision, field, dig, walkSpeedLock
 local sprinklerPlace = false; farmingActive = false
+local lastConvertTime = tick()
 
 local queue = {
 	auto_farm = {},
@@ -256,27 +257,20 @@ function farming.lockWalkSpeed()
 		walkSpeedLock = nil
 	end
 
-	walkSpeedLock = movement.conAF(
-		find.prerender, 4,
-		function()
-			if not actives["auto_farm"] then
-				if walkSpeedLock then
-					walkSpeedLock:Disconnect()
-					walkSpeedLock = nil
-				end
-				return
-			end
+	walkSpeedLock = find.prerender:Connect(function()
+		local character = find.player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not humanoid then return end
 
-			local character = find.player.Character
-			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-			if not humanoid then return end
-
-			local want = actives["walkspeed"] or 16
-			if humanoid.WalkSpeed ~= want then
-				humanoid.WalkSpeed = want
-			end
+		local want = actives["walkspeed"]
+		if type(want) ~= "number" then
+			want = 16
 		end
-	)
+
+		if humanoid.WalkSpeed ~= want then
+			humanoid.WalkSpeed = want
+		end
+	end)
 end
 
 function farming.farm(...)
@@ -288,6 +282,8 @@ function farming.farm(...)
 		actives.move = false
 		return
 	end
+	
+	lastConvertTime = lastConvertTime or tick()
 	--if not status then
 	--	return farming.noClip(status)
 	--end --return if not active
@@ -376,6 +372,20 @@ function farming.farm(...)
 			return math.abs(p.X) <= s.X and math.abs(p.Z) <= s.Z and p.Y >= -3 and p.Y <= 15
 		end
 		
+		local function isBubble(part)
+			local n = part.Name
+			return n == "Bubble" or n == "GoldBubble"
+		end
+		
+		local function getPriority(obj)
+			if isBubble(obj) then
+				return tonumber(actives["bubble_priority"]) or 49
+			end
+			local tp = actives["token_priorities"] or {}
+			local dp = actives["drops_priorities"] or {}
+			return tp[obj.Name] or dp[obj.Name] or 0
+		end
+		
 		local lastField = nil
 		while actives["auto_farm"] == true do
 			
@@ -420,16 +430,37 @@ function farming.farm(...)
 			end
 
 			table.clear(queue["tokens"])
-
-			if collectibles and field then
-				if root then
+			
+			if root and field then
+				if collectibles then
 					for _, v in pairs(collectibles:GetChildren()) do
-						if v:IsA("BasePart") and field and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+						if v:IsA("BasePart") and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
 							table.insert(queue["tokens"], v)
 						end
 					end
 				end
+				
+				if actives["bubble"] then
+					local particles = workspace:FindFirstChild("Particles")
+					if particles then
+						for _, v in pairs(particles:GetChildren()) do
+							if v:IsA("BasePart") and isBubble(v) and v.Transparency < 1 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+								table.insert(queue["tokens"], v)
+							end
+						end
+					end
+				end
 			end
+
+			--if collectibles and field then
+			--	if root then
+			--		for _, v in pairs(collectibles:GetChildren()) do
+			--			if v:IsA("BasePart") and field and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+			--				table.insert(queue["tokens"], v)
+			--			end
+			--		end
+			--	end
+			--end
 
 			if #queue["tokens"] > 0 then
 				if not root then
@@ -437,16 +468,26 @@ function farming.farm(...)
 					return
 				end
 
+				--local position = root.Position
+				--local speed = removeTable.speed or actives["walkspeed"]
+				--table.sort(queue["tokens"], function(x, y)
+				--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
+				--end)
+				
 				local position = root.Position
 				local speed = removeTable.speed or actives["walkspeed"]
 				table.sort(queue["tokens"], function(x, y)
+					local px, py = getPriority(x), getPriority(y)
+					if px ~= py then
+						return px > py
+					end
 					return (position - x.Position).Magnitude < (position - y.Position).Magnitude
 				end)
 
 				while actives["auto_farm"] and #queue["tokens"] > 0 do
 					while #queue["tokens"] > 0 do
 						local first = queue["tokens"][1]
-						if first and first.Parent and first.Transparency <= 0 and isTokenInField(first, field) then
+						if first and first.Parent and first.Transparency <= 1 and isTokenInField(first, field) then
 							break
 						end
 						table.remove(queue["tokens"], 1)
@@ -513,8 +554,13 @@ function farming.farm(...)
 			
 			local info = mod.convert.get_pollen_info()
 			local threshold = actives["backpack"] or 80
+			local intervalMinutes = tonumber(actives["convert_interval"]) or 15
+			local interval = intervalMinutes * 60
 
-			if info and info.percent >= threshold and info.pollen > 0 then
+			local byBackpack = info and info.percent >= threshold and info.pollen > 0
+			local byTime = (tick() - lastConvertTime) >= interval
+
+			if byBackpack or byTime then
 				local currentPos = select(1, farming.getHive())
 				if not currentPos then
 					farmingActive = false
@@ -523,6 +569,7 @@ function farming.farm(...)
 					return
 				end
 
+				lastConvertTime = tick()
 				farmingActive = false
 				actives["move"] = false
 				movement.move("hive", actives["walkspeed"], currentPos, function()
@@ -553,7 +600,6 @@ function farming.farm(...)
 	end
 	
 	if hivePos ~= nil then
-		farming.lockWalkSpeed()
 		mod.movement.move("go_to_field", walkspeed, field, function()
 			if not actives["auto_farm"] then
 				return
@@ -575,6 +621,7 @@ end
 
 task.spawn(function()
 	task.wait(2)
+	farming.lockWalkSpeed()
 	if actives["auto_farm"] then
 		farming.farm()
 	end
@@ -597,12 +644,12 @@ local function respawn(...)
 		
 		farmingActive = false
 		actives["move"] = false
+		lastConvertTime = tick()
 		
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
 		
 		if actives["auto_farm"] then
-			farming.lockWalkSpeed()
 			farming.farm()
 		end
 		
