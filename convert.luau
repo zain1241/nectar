@@ -166,10 +166,6 @@ end
 print("load3")
 
 function convert.autoHive(...)
-	print(222)
-	if actives["auto_hive"] == false then
-		return
-	end
 	print(333)
 
 	local character = find.player.Character
