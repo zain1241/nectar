@@ -163,21 +163,6 @@ function convert.getHive()
 	return nil, nil
 end
 
-local function waitUntilNear(targetPos, radius, timeout)
-	radius = radius or 10
-	timeout = timeout or 30
-	local deadline = tick() + timeout
-	while tick() < deadline do
-		local c = find.player.Character
-		local root = c and c:FindFirstChild("HumanoidRootPart")
-		if root and (root.Position - targetPos).Magnitude <= radius then
-			return true
-		end
-		task.wait(0.1)
-	end
-	return false
-end
-
 function convert.autoHive(...)
 	if actives["auto_hive"] == false then
 		return
@@ -258,8 +243,6 @@ function convert.autoHive(...)
 		convert.convert()
 		print(7)
 	end, newId)
-	
-	waitUntilNear(newPos, 10, 30)
 end
 
 function convert.get_pollen_info()
