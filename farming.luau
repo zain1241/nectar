@@ -256,21 +256,31 @@ function farming.lockWalkSpeed()
 		walkSpeedLock:Disconnect()
 		walkSpeedLock = nil
 	end
+	
+	walkSpeedLock = farming.conAF(
+		find.prerender, 2,
+		function(delta)
+			if actives["fast_run"] then
+				local character = find.player.Character
+				local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if not humanoid then return end
 
-	walkSpeedLock = find.prerender:Connect(function()
-		local character = find.player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if not humanoid then return end
+				local want = actives["walkspeed"]
+				if type(want) ~= "number" then
+					want = 16
+				end
 
-		local want = actives["walkspeed"]
-		if type(want) ~= "number" then
-			want = 16
+				if humanoid.WalkSpeed ~= want then
+					humanoid.WalkSpeed = want
+				end
+			else
+				if walkSpeedLock then
+					walkSpeedLock:Disconnect()
+					walkSpeedLock = nil
+				end
+			end
 		end
-
-		if humanoid.WalkSpeed ~= want then
-			humanoid.WalkSpeed = want
-		end
-	end)
+	)
 end
 
 function farming.farm(...)
@@ -435,11 +445,14 @@ function farming.farm(...)
 				if collectibles then
 					for _, v in pairs(collectibles:GetChildren()) do
 						if v:IsA("BasePart") and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
-							table.insert(queue["tokens"], v)
+							local prio = getPriority(v)
+							if prio > 0 then
+								table.insert(queue["tokens"], v)
+							end
 						end
 					end
 				end
-				
+
 				if actives["bubble"] then
 					local particles = workspace:FindFirstChild("Particles")
 					if particles then
