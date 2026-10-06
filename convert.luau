@@ -271,7 +271,7 @@ function convert.autoHive(...)
 	movement.move("hive", actives["walkspeed"], newPos, function()
 		task.wait(1)
 		convert.convert()
-		print(7)
+		--print(7)
 	end, newId)
 end
 
@@ -592,7 +592,7 @@ function convert.equip_mask(name)
 	end
 	
 	item:InvokeServer("Equip", {Mute = false, Type = name, Category = "Accessory"})
-	print(2)
+	--print(2)
 
 	return true
 end
