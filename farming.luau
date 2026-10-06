@@ -607,6 +607,11 @@ function farming.farm(...)
 			if not actives["move"] then
 				task.spawn(metod)
 			end
+			
+			if actives["mask"] ~= "None" then
+				local mask = actives["mask"]
+				convert.equip_mask(mask)
+			end
 
 			if actives["sprinkler"] then
 				farming.sprinkler(true)
