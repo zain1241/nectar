@@ -204,9 +204,6 @@ function convert.autoHive(...)
 
 	if hiveChoice == "Random" then
 		targetHiveId = find.random:NextInteger(1, 6)
-	else
-		targetHiveId = tonumber(tostring(hiveChoice):match("%d+"))
-			or find.random:NextInteger(1, 6)
 	end
 
 	local ok, err = pcall(function()
