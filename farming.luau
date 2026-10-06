@@ -349,6 +349,14 @@ function farming.farm(...)
 		
 		local lastField = nil
 		while actives["auto_farm"] == true do
+			
+			if find.player.Character ~= character then
+				break
+			end
+			if not humanoid or not humanoid.Parent or humanoid.Health <= 0 then
+				break
+			end
+			
 			local zones = workspace:FindFirstChild("FlowerZones")
 			if actives["field"] == "" or actives["field"] == false or actives["field"] == nil then
 				field = nil
@@ -554,6 +562,17 @@ local function respawn(...)
 	local a = {...}
 	if a[1] then
 		task.wait(1)
+		
+		if movement.stop then
+			movement.stop()
+		end
+		
+		farmingActive = false
+		actives["move"] = false
+		
+		table.clear(queue["auto_farm"])
+		table.clear(queue["dig"])
+		
 		if actives["auto_farm"] then
 			farming.farm()
 		end
