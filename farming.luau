@@ -195,6 +195,21 @@ function movement.getHive()
 	return nil, nil
 end
 
+local function waitUntilNear(targetPos, radius, timeout)
+	radius = radius or 10
+	timeout = timeout or 30
+	local deadline = tick() + timeout
+	while tick() < deadline do
+		local c = find.player.Character
+		local root = c and c:FindFirstChild("HumanoidRootPart")
+		if root and (root.Position - targetPos).Magnitude <= radius then
+			return true
+		end
+		task.wait(0.1)
+	end
+	return false
+end
+
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
@@ -212,9 +227,12 @@ function farming.farm(...)
 	
 	local hivePos, hiveId = movement.getHive()
 	if not hivePos and actives["auto_hive"] then
+		print(hivePos, hiveId)
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
+		
+		waitUntilNear(hivePos, 10, 30)
 		return
 	end
 	
