@@ -587,7 +587,7 @@ function menu.main_nav()
 	addNavigation("Farming", "rbxassetid://15332137726", 1)
 	--addNavigation("Planters", "rbxassetid://13060262529", 2)
 	--addNavigation("Toys", "rbxassetid://102597526078163", 3)
-	--addNavigation("Config", "rbxassetid://4857706689", 4)
+	addNavigation("Config", "rbxassetid://4857706689", 4)
 
 	showsel("Farming")
 end
