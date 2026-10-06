@@ -2,12 +2,13 @@
 local env = (getgenv and getgenv()) or _G
 local loaded = rawget(env, "__NECTAR_MODULES")
 
-local data, farming
-if loaded and loaded.data and loaded.farming then
-	data, farming = loaded.data, loaded.farming
+local data, farming, convert
+if loaded and loaded.data and loaded.farming and loaded.convert then
+	data, farming, convert = loaded.data, loaded.farming, loaded.convert
 else
 	data = require(script.Parent:WaitForChild("data"))
 	farming = require(script.Parent:WaitForChild("farming"))
+	convert = require(script.Parent:WaitForChild("convert"))
 end
 
 local mod = { data = data, farming = farming }
@@ -1791,6 +1792,21 @@ function menu.dop_create()
 						--		end
 						--	end,
 						--},
+					},
+				},
+			},
+		},
+		
+		{
+			name = "Config",
+			lists = {
+				{
+					--settings
+					name = "Hive",
+					opened = true,
+					--
+					items = {
+						{ type = "button", text = "Auto Hive", key = "auto_hive", callback = convert.autoHive },
 					},
 				},
 			},
