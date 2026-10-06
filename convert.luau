@@ -163,23 +163,33 @@ function convert.getHive()
 	return nil, nil
 end
 
-print("load3")
+print("load4")
+
+local function isHiveFree(hiveId)
+	local honeycombs = workspace:FindFirstChild("Honeycombs")
+	if not honeycombs then return false end
+
+	for _, hive in ipairs(honeycombs:GetChildren()) do
+		local id = hive:FindFirstChild("HiveID")
+		if id and id.Value == hiveId then
+			local owner = hive:FindFirstChild("Owner")
+			if not owner then return true end
+			local v = owner.Value
+			return v == nil or v == "" or v == "None"
+		end
+	end
+	return false
+end
 
 function convert.autoHive(...)
-	print(333)
-
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
-	
-	print(534534)
 
 	if not humanoid or not root or not honeycombs then
 		return
 	end
-	
-	print("4")
 
 	actives["convert"] = false
 
@@ -196,8 +206,6 @@ function convert.autoHive(...)
 		return
 	end
 	
-	print(5)
-	
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local claimHive = events and events:FindFirstChild("ClaimHive")
 
@@ -205,14 +213,32 @@ function convert.autoHive(...)
 		warn("not claimHive")
 		return
 	end
-	
-	print(6)
 
 	local hiveChoice = actives["hive_choice"] or "Random"
 	local targetHiveId
 
 	if hiveChoice == "Random" then
-		targetHiveId = find.random:NextInteger(1, 6)
+		local free = {}
+		local honeycombs = workspace:FindFirstChild("Honeycombs")
+		if honeycombs then
+			for _, hive in ipairs(honeycombs:GetChildren()) do
+				local id = hive:FindFirstChild("HiveID")
+				if id and isHiveFree(id.Value) then
+					table.insert(free, id.Value)
+				end
+			end
+		end
+		if #free == 0 then
+			warn("not found free hive")
+			return
+		end
+		targetHiveId = free[find.random:NextInteger(1, #free)]
+	else
+		targetHiveId = tonumber(tostring(hiveChoice):match("%d+"))
+		if not targetHiveId or not isHiveFree(targetHiveId) then
+			warn("hive", hiveChoice, "not free")
+			return
+		end
 	end
 
 	local ok, err = pcall(function()
