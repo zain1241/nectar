@@ -24,16 +24,19 @@ data.zones = {
 data.actives = {
 	--unit
 	auto_farm = false,
+	sprinkler = false,
+	dig = false,
 	
 	move = false,
 	convert = false,
 	
-	sprinkler = false,
 	field = "Blue Flower Field",
 	position_field = "center",
 	
 	--converting honey
 	honey_mask = false,
+	balloon = false,
+	backpack = 80,
 	mask = "None",
 	
 	--settings global
