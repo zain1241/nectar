@@ -302,8 +302,6 @@ function convert.get_pollen_info()
 	}
 end
 
-print(1)
-
 function convert.convert(...)
 	local a = {...}
 	
@@ -544,18 +542,14 @@ function convert.convert(...)
 					end
 				end
 				
-				local mask = actives["mask"]
-				if mask then
-					convert.equip_mask(mask)
-					task.wait(.4)
-				end
-				
 				actives["last_time_convert"] = tick()
 				actives["convert"] = false
 				actives["move"] = false
 				
 				if actives["auto_farm"] then
 					if farming and farming.farm then
+						local mask = actives["mask"]
+						convert.equip_mask(mask)
 						farming.farm()
 					end
 				end
@@ -582,6 +576,7 @@ function convert.equip_mask(name)
 	end
 	
 	item:InvokeServer("Equip", {Mute = false, Type = name, Category = "Accessory"})
+	print(2)
 
 	return true
 end
