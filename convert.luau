@@ -163,8 +163,6 @@ function convert.getHive()
 	return nil, nil
 end
 
-print("load5")
-
 local function isHiveFree(hiveId)
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
 	if not honeycombs then return false end
@@ -198,7 +196,7 @@ function convert.autoHive(...)
 	
 	local hivePos, hiveID = convert.getHive()
 	if hivePos then
-		print(1)
+		--print(1)
 		movement.move("hive", actives["walkspeed"], hivePos, function()
 			task.wait(1)
 			convert.convert()
@@ -264,7 +262,7 @@ function convert.autoHive(...)
 		return
 	end
 	
-	print(newPos)
+	--print(newPos)
 	
 	movement.move("hive", actives["walkspeed"], newPos, function()
 		task.wait(1)
@@ -481,6 +479,53 @@ function convert.convert(...)
 			end
 			
 			task.spawn(function()
+				if actives["balloon"] then
+					local function find(...)
+						local a = {...}
+						
+						local body = workspace:FindFirstChild("HiveBalloons"):FindFirstChild("HiveBalloons"):FindFirstChild("HiveBalloonInstance")
+						
+						for _, container in ipairs(body) do
+							local b = container:FindFirstChild("BalloonBody")
+							if b and b:IsA("BasePart") and b.Parent then
+								if (b.Position - find.player.Character.PrimaryPart.Position).Magnitude <= 60 then
+									return b
+								end
+							end
+						end
+					end
+					
+					local balloon = nil
+					local start = tick()
+					
+					while tick() - start < 10 do
+						if not actives["auto_farm"] then
+							break
+						end
+						
+						balloon = find()
+						if balloon then
+							break
+						end
+						
+						task.wait(.5)
+					end
+					
+					if balloon then
+						local popStart = tick()
+						local timeout = 600 -- 10 min
+						while balloon.Parent and actives["auto_farm"] and (tick() - popStart) < timeout do
+							task.wait(.2)
+						end
+						
+						if balloon.Parent then
+							warn("convert balloon did not pop in " .. timeout .. "s (timeout)")
+						else
+							task.wait(2)
+						end
+					end
+				end
+				
 				local mask = actives["mask"]
 				if mask then
 					convert.equip_mask(mask)
