@@ -506,8 +506,10 @@ function farming.farm(...)
 						return px > py
 					end
 
-					return (position - x.Position).Magnitude <
-						(position - y.Position).Magnitude
+					local dx = (position - x.Position).Magnitude
+					local dy = (position - y.Position).Magnitude
+
+					return dx < dy
 				end)
 
 				while actives["auto_farm"] and #queue["tokens"] > 0 do
@@ -527,6 +529,24 @@ function farming.farm(...)
 					if not target then
 						break
 					end
+					
+					local targetIsBubble = isBubble(target)
+					local targetDistance = (position - target.Position).Magnitude
+
+					if targetIsBubble and targetDistance > 25 then
+						for i = 2, #queue["tokens"] do
+							local candidate = queue["tokens"][i]
+
+							if not isBubble(candidate) then
+								local distance = (position - candidate.Position).Magnitude
+
+								if distance <= 25 then
+									target = candidate
+									break
+								end
+							end
+						end
+					end
 
 					local tp = Vector3.new(target.Position.X, root.Position.Y, target.Position.Z)
 					local dist = (tp - root.Position).Magnitude
@@ -537,7 +557,7 @@ function farming.farm(...)
 					end
 					
 					humanoid:MoveTo(tp)
-					task.wait()
+					find.prerender:Wait()
 				end
 			else
 				if removeTable.targetPos and removeTable.speed then
@@ -658,7 +678,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(1111)
 
 task.spawn(function()
 	task.wait(2)
