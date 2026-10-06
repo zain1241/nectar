@@ -90,6 +90,10 @@ function movement.noClip(...)
 	}
 	
 	if a[1] then
+		if noCollision then
+			noCollision:Disconnect()
+			noCollision = nil
+		end
 		noCollision = movement.conAF(
 			find.prerender, 4,
 			function()
@@ -407,9 +411,6 @@ function movement.move(...)
 		
 		
 	elseif a[1] == "hive" then
-		if not actives["auto_hive"] then
-			return true
-		end
 		
 		local target = a[3]
 		if typeof(target) ~= "Vector3" then
@@ -432,6 +433,10 @@ function movement.move(...)
 		local hivePos = movement.getHive()
 		
 		if not hivePos then
+			if not actives["auto_hive"] then
+				return false
+			end
+			
 			if a[5] == nil then
 				actives["move"] = false
 				return false
