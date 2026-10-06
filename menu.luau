@@ -1781,6 +1781,8 @@ function menu.dop_create()
 					opened = true,
 					items = {
 						{ type = "button", text = "Bubble", key = "bubble", callback = farming.farm },
+						{ type = "button", text = "Priority Tokens", key = "no_priotiy_tokens", callback = farming.farm },
+						{ type = "button", text = "Priority Drops", key = "no_priority_drops", callback = farming.farm },
 
 						{
 							type = "addlistchose",
