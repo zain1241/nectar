@@ -231,10 +231,13 @@ function farming.farm(...)
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
+		print(12)
 		
 		waitUntilNear(hivePos, 10, 30)
 		return
 	end
+	
+	print(11)
 	
 	local field = actives["field"]
 	local fields = workspace:FindFirstChild("FlowerZones")
