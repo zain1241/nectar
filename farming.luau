@@ -210,7 +210,7 @@ local function waitUntilNear(targetPos, radius, timeout)
 	return false
 end
 
-print("load")
+print("load1")
 
 function farming.farm(...)
 	local status = actives.auto_farm
@@ -229,7 +229,7 @@ function farming.farm(...)
 	
 	local hivePos, hiveId = movement.getHive()
 	print(hivePos, hiveId, "423")
-	if hivePos == nil and actives["auto_hive"] then
+	if hivePos == nil and hiveId == nil then
 		print(hivePos, hiveId)
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
@@ -451,7 +451,7 @@ function farming.farm(...)
 		end
 	end
 	
-	if hivePos then
+	if hivePos ~= nil then
 		print(432)
 		mod.movement.move("go_to_field", walkspeed, field, function()
 			print(123)
