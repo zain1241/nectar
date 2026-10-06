@@ -35,7 +35,7 @@ function farming.Hive(...)
 	--
 end
 
-function convert.conAF(...)
+function farming.conAF(...)
 	local a = {...}
 	local interval = 1 / a[2]
 	local accumulated = 0
