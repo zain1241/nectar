@@ -23,7 +23,7 @@ local find = {
 }
 
 local farming = {}
-local noCollision, field
+local noCollision, field, dig
 local sprinklerPlace = false; farmingActive = false
 
 local queue = {
@@ -35,7 +35,24 @@ function farming.Hive(...)
 	--
 end
 
-function movement.noClip(...)
+function convert.conAF(...)
+	local a = {...}
+	local interval = 1 / a[2]
+	local accumulated = 0
+
+	return a[1]:Connect(function(delta)
+		accumulated += delta
+		if accumulated < interval then
+			return
+		end
+		local elapsed = accumulated
+		accumulated %= interval
+
+		a[3](elapsed)
+	end)
+end
+
+function farming.noClip(...)
 	local a = {...}
 
 	local parts = {
@@ -73,7 +90,7 @@ function movement.noClip(...)
 	end
 end
 
-function movement.control(...)
+function farming.control(...)
 	local a = {...}
 	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
 	local function block(...)
@@ -116,7 +133,7 @@ local function getStats(...)
 	return nil
 end
 
-function movement.sprinkler(...)
+function farming.sprinkler(...)
 	local a = {...}
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -156,7 +173,7 @@ function movement.sprinkler(...)
 	return ok
 end
 
-function movement.getHive()
+function farming.getHive()
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local honeycombs = workspace:FindFirstChild("Honeycombs")
@@ -195,7 +212,34 @@ function movement.getHive()
 	return nil, nil
 end
 
-print("load2")
+function farming.dig(...)
+	local a = {...}
+	
+	if a[1] ~= true then
+		return
+	end
+	
+	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+	local collect = events and events:FindFirstChild("ToolCollect")
+	if not collect or not collect:IsA("RemoteEvent") then
+		warn("tool is not find")
+		return
+	end
+	
+	dig = farming.conAF(
+		find.prerender, 1,
+		function(delta)
+			if actives["dig"] then
+				collect:FireServer()
+			else
+				if dig then
+					dig:Disconnect()
+					dig = nil
+				end
+			end
+		end
+	)
+end
 
 function farming.farm(...)
 	local status = actives.auto_farm
@@ -212,18 +256,15 @@ function farming.farm(...)
 	
 	--farming.noClip(status)
 	
-	local hivePos, hiveId = movement.getHive()
+	local hivePos, hiveId = farming.getHive()
 	print(hivePos, hiveId, "423")
 	if hivePos == nil and hiveId == nil then
 		print(hivePos, hiveId)
 		mod.convert.autoHive()
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
-		print(12)
 		return
 	end
-	
-	print(11)
 	
 	local field = actives["field"]
 	local fields = workspace:FindFirstChild("FlowerZones")
@@ -414,6 +455,28 @@ function farming.farm(...)
 					end
 				end
 			end
+			
+			local info = mod.convert.get_pollen_info()
+			local threshold = actives["backpack"] or 80
+
+			if info and info.percent >= threshold and info.pollen > 0 then
+				local currentPos = select(1, farming.getHive())
+				if not currentPos then
+					farmingActive = false
+					actives["move"] = false
+					mod.convert.autoHive()
+					return
+				end
+
+				farmingActive = false
+				actives["move"] = false
+				movement.move("hive", actives["walkspeed"], currentPos, function()
+					task.wait(1)
+					mod.convert.convert()
+				end)
+				return
+			end
+			
 			task.wait()
 		end
 		
@@ -435,9 +498,7 @@ function farming.farm(...)
 	end
 	
 	if hivePos ~= nil then
-		print(432)
 		mod.movement.move("go_to_field", walkspeed, field, function()
-			print(123)
 			if not actives["auto_farm"] then
 				return
 			end
@@ -446,7 +507,7 @@ function farming.farm(...)
 			end
 
 			if actives["sprinkler"] then
-				movement.sprinkler(true)
+				farming.sprinkler(true)
 			end
 
 			--if actives["honey_mask"] then
@@ -454,6 +515,42 @@ function farming.farm(...)
 			--end
 		end) -- go to field
 	end
+end
+
+task.spawn(function()
+	task.wait(2)
+	if actives["auto_farm"] then
+		farming.farm()
+	end
+	
+	if actives["dig"] then
+		farming.dig()
+	end
+	
+end)
+
+local function respawn(...)
+	task.wait(.4)
+	local a = {...}
+	if a[1] then
+		task.wait(1)
+		if actives["auto_farm"] then
+			farming.farm()
+		end
+		
+		if actives["dig"] then
+			farming.dig()
+		end
+	end
+end
+
+find.player.CharacterAdded:Connect(respawn)
+
+if find.player.Character then
+	task.spawn(function()
+		task.wait(.4)
+		respawn(find.player.Character)
+	end)
 end
 
 return farming
