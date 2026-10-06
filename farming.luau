@@ -389,11 +389,13 @@ function farming.farm(...)
 		
 		local function getPriority(obj)
 			if isBubble(obj) then
-				return tonumber(actives["bubble_priority"]) or 1
+				return tonumber(actives["bubble_priority"]) or 0
 			end
+
 			local tp = actives["token_priorities"] or {}
 			local dp = actives["drops_priorities"] or {}
-			return tp[obj.Name] or dp[obj.Name] or 0
+
+			return tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
 		end
 		
 		local lastField = nil
@@ -497,15 +499,15 @@ function farming.farm(...)
 				--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
 				--end)
 				table.sort(queue["tokens"], function(x, y)
-					local bx, by = isBubble(x), isBubble(y)
-					if bx ~= by then
-						return by
-					end
-					local px, py = getPriority(x), getPriority(y)
+					local px = getPriority(x)
+					local py = getPriority(y)
+
 					if px ~= py then
 						return px > py
 					end
-					return (position - x.Position).Magnitude < (position - y.Position).Magnitude
+
+					return (position - x.Position).Magnitude <
+						(position - y.Position).Magnitude
 				end)
 
 				while actives["auto_farm"] and #queue["tokens"] > 0 do
@@ -548,17 +550,25 @@ function farming.farm(...)
 								break
 							end
 
-							local hasToken = false
-							if collectibles and field then
-								for _, v in pairs(collectibles:GetChildren()) do
-									if v:IsA("BasePart") and field and isTokenInField(v, field) then
-										hasToken = true
-										break
-									end
-								end
+							--local hasToken = false
+							--if collectibles and field then
+							--	for _, v in pairs(collectibles:GetChildren()) do
+							--		if v:IsA("BasePart") and field and isTokenInField(v, field) then
+							--			hasToken = true
+							--			break
+							--		end
+							--	end
+							--end
+
+							--if hasToken or not humanoid or not root then
+							--	break
+							--end
+							
+							if #queue["tokens"] > 0 then
+								break
 							end
 
-							if hasToken or not humanoid or not root then
+							if not humanoid or not root then
 								break
 							end
 
@@ -647,6 +657,8 @@ function farming.farm(...)
 		end) -- go to field
 	end
 end
+
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
