@@ -94,18 +94,17 @@ function movement.noClip(...)
 			noCollision:Disconnect()
 			noCollision = nil
 		end
-		noCollision = movement.conAF(
-			find.prerender, 4,
-			function()
-				local c = find.player.Character
-				if not c then return end
-				for _, v in ipairs(c:GetDescendants()) do
-					if parts[v.Name] and v:IsA("BasePart") then
+		noCollision = find.prerender:Connect(function()
+			local c = find.player.Character
+			if not c then return end
+			for _, v in ipairs(c:GetDescendants()) do
+				if parts[v.Name] and v:IsA("BasePart") then
+					if v.CanCollide then
 						v.CanCollide = false
 					end
 				end
 			end
-		)
+		end)
 	else
 		if noCollision then
 			noCollision:Disconnect()
@@ -313,6 +312,8 @@ function movement.move(...)
 			move = nil
 		end
 		
+		movement.noClip(true)
+		
 		local a = {...}
 		if not find.player.Character:WaitForChild("Humanoid") then
 			return
@@ -324,7 +325,7 @@ function movement.move(...)
 		if not root then
 			if a[4] then
 				actives["move"] = false
-				movement.noClip(false)
+				--movement.noClip(false)
 				task.spawn(a[4])
 			end
 			return
@@ -345,7 +346,7 @@ function movement.move(...)
 		local start = tick()
 		local timeout = distance / flySpeed
 		
-		movement.noClip(true)
+		--movement.noClip(true)
 		humanoid.PlatformStand = true
 		humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
 		humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
@@ -354,6 +355,15 @@ function movement.move(...)
 		humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
 		
 		move = find.prerender:Connect(function(dt)
+			local char = find.player.Character
+			if not char then
+				actives["move"] = false
+				movement.noClip(false)
+				if move then move:Disconnect() move = nil end
+				if a[4] then task.spawn(a[4]) end
+				return
+			end
+			
 			local rootPart = find.player.Character:WaitForChild("HumanoidRootPart")
 			if not rootPart then
 				actives["move"] = false
@@ -382,10 +392,10 @@ function movement.move(...)
 				
 				movement.noClip(false)
 				actives["move"] = false
+				move:Disconnect()
 				if a[4] then
 					task.spawn(a[4])
 				end
-				move:Disconnect()
 				--print("moved end")
 				return
 			end
