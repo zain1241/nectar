@@ -387,15 +387,41 @@ function farming.farm(...)
 			return n == "Bubble" or n == "GoldBubble"
 		end
 		
+		--local function getPriority(obj)
+		--	if isBubble(obj) then
+		--		return (tonumber(actives["bubble_priority"]) or 0) * 0.2
+		--	end
+
+		--	local tp = actives["token_priorities"] or {}
+		--	local dp = actives["drops_priorities"] or {}
+
+		--	return tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
+		--end
+		
 		local function getPriority(obj)
+			local tp = actives["token_priorities"] or {}
+			local dp = actives["drops_priorities"] or {}
+			
 			if isBubble(obj) then
 				return (tonumber(actives["bubble_priority"]) or 0) * 0.2
 			end
+			
+			local base = 1000
+			local namePrio = tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
+			local isDrop = dp[obj.Name] ~= nil
 
-			local tp = actives["token_priorities"] or {}
-			local dp = actives["drops_priorities"] or {}
+			local categoryPrio = 0
+			if isDrop then
+				if not actives["no_priority_drops"] then
+					categoryPrio = 100
+				end
+			else
+				if not actives["no_priority_field"] then
+					categoryPrio = 200
+				end
+			end
 
-			return tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
+			return base + categoryPrio + namePrio
 		end
 		
 		local lastField = nil
@@ -684,7 +710,7 @@ function farming.farm(...)
 	end
 end
 
-print(44444)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
