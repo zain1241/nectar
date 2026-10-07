@@ -1792,6 +1792,7 @@ function menu.dop_create()
 						{ type = "button", text = "Priority Tokens", key = "no_priotiy_tokens", callback = farming.farm },
 						{ type = "button", text = "Priority Drops", key = "no_priority_drops", callback = farming.farm },
 						{ type = "button", text = "Massles", key = "massles" },
+						{ type = "button", text = "Sprouts", key = "sprout" },
 						{
 							type = "slider",
 							text = "Mssles(1stud)",
