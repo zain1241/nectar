@@ -1779,7 +1779,7 @@ function menu.dop_create()
 							key = "walkspeed",
 							min = 1,
 							max = 120,
-							step = 80,
+							step = 1,
 						},
 					},
 				},
@@ -1798,7 +1798,7 @@ function menu.dop_create()
 							key = "massles_slider",
 							min = 1,
 							max = 10,
-							step = 2,
+							step = 1,
 						},
 
 						{
@@ -1874,7 +1874,7 @@ function menu.dop_create()
 							key = "backpack",
 							min = 10,
 							max = 100,
-							step = 80,
+							step = 1,
 						},
 						{
 							type = "slider",
@@ -1882,7 +1882,7 @@ function menu.dop_create()
 							key = "convert_interval",
 							min = 1,
 							max = 120,
-							step = 15,
+							step = 1,
 						},
 						--{
 						--	type = "addlistchose",
