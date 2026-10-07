@@ -319,17 +319,30 @@ function farming.sprout(...)
 	
 	local sprout, position, resumed
 
-	if farming.__pendingSprout and farming.__pendingSprout.Parent then
-		sprout = farming.__pendingSprout
-		resumed = true
-		farming.__pendingSprout = nil
+	if farming.__pendingSprout then
+		if farming.__pendingSprout.Parent then
+			sprout = farming.__pendingSprout
+			resumed = true
+			farming.__pendingSprout = nil
+		else
+			farming.__pendingSprout = nil
+			table.clear(queue["auto_farm"])
+			table.clear(queue["tokens"])
+			local returnField = farming.__sproutOrigField or actives["field"]
+			farming.__sproutOrigField = nil
+			if returnField then
+				actives["field"] = returnField
+				task.spawn(function()
+					mod.movement.move("go_to_field", actives["walkspeed"], returnField, function() end)
+				end)
+			end
+			return
+		end
 	else
 		if tick() - farming.__lastSproutTime >= 3 then
 			local sprouts = workspace:FindFirstChild("Sprouts")
-			if not sprouts then
-				return
-			end
-			
+			if not sprouts then return end
+
 			for _, obj in ipairs(sprouts:GetChildren()) do
 				if obj:IsA("Model") or obj:IsA("BasePart") then
 					sprout = obj
@@ -412,6 +425,9 @@ function farming.sprout(...)
 		while tick() < stop and sproutId == farming.__sproutId and actives["auto_farm"] == true do
 			task.wait(.2)
 		end
+		
+		table.clear(queue["auto_farm"])
+		table.clear(queue["tokens"])
 
 		if sproutId == farming.__sproutId and actives["auto_farm"] == true and farming.__sproutOrigField then
 			actives["field"] = farming.__sproutOrigField
@@ -476,7 +492,7 @@ function farming.sprout(...)
 			if stale then
 				local ang = find.random:NextNumber(0, math.pi * 2)
 				local t = find.random:NextNumber() ^ 0.6
-				local r = 3 + (40 - 3) * t
+				local r = 3 + (15 - 3) * t
 				target = Vector3.new(
 					center.X + math.cos(ang) * r,
 					root.Position.Y,
@@ -936,7 +952,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(44444)
 
 task.spawn(function()
 	task.wait(2)
