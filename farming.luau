@@ -324,7 +324,7 @@ function farming.sprout(...)
 		resumed = true
 		farming.__pendingSprout = nil
 	else
-		if tick() - farming.__lastSproutTime < 3 then
+		if tick() - farming.__lastSproutTime >= 3 then
 			local sprouts = workspace:FindFirstChild("Sprouts")
 			if not sprouts then
 				return
@@ -488,9 +488,7 @@ function farming.sprout(...)
 		end)
 	end
 	
-	mod.movement.move("move", actives["walkspeed"], sprout.Position, function()
-		task.wait(1)
-	end)
+	field(position)
 end
 
 function farming.farm(...)
@@ -935,7 +933,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(44444)
 
 task.spawn(function()
 	task.wait(2)
