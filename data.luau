@@ -170,6 +170,9 @@ data.actives = {
 	--field
 	bubble = false,
 	bubble_priority = 1,
+	sprout = false,
+	massles = true,
+	massles_slider = 1,
 	no_priotiy_tokens = true,
 	no_priority_drops = true,
 	
@@ -182,7 +185,7 @@ data.actives = {
 	
 	--settings global
 	anti_afk = true,
-	walkspeed = 40,
+	walkspeed = 80,
 	
 	--utils
 	auto_hive = true,
@@ -191,7 +194,7 @@ data.actives = {
 	last_time_convert = 0,
 	
 	--other settings
-	script_name = "Nectar 0005",
+	script_name = "Nectar 0006",
 	position_script = UDim2.new(0.22, 0, 0.5, 0),
 }
 
