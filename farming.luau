@@ -333,7 +333,16 @@ function farming.sprout(...)
 			if returnField then
 				actives["field"] = returnField
 				task.spawn(function()
-					mod.movement.move("go_to_field", actives["walkspeed"], returnField, function() end)
+					mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
+						if actives["mask"] ~= "None" then
+							local mask = actives["mask"]
+							mod.convert.equip_mask(mask)
+						end
+
+						if actives["sprinkler"] then
+							farming.sprinkler(true)
+						end
+					end)
 				end)
 			end
 			return
@@ -436,7 +445,16 @@ function farming.sprout(...)
 		
 		local targetField = actives["field"]
 		if targetField and targetField ~= sField then
-			mod.movement.move("go_to_field", actives["walkspeed"], targetField, function() end)
+			mod.movement.move("go_to_field", actives["walkspeed"], targetField, function()
+				if actives["mask"] ~= "None" then
+					local mask = actives["mask"]
+					mod.convert.equip_mask(mask)
+				end
+
+				if actives["sprinkler"] then
+					farming.sprinkler(true)
+				end
+			end)
 		end
 	end
 	
@@ -952,7 +970,7 @@ function farming.farm(...)
 	end
 end
 
-print(44444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
