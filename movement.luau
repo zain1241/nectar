@@ -503,6 +503,24 @@ function movement.move(...)
 
 		return true
 		--
+	elseif a[1] == "move" then
+		local target = a[3]
+		if typeof(target) ~= "Vector3" then
+			return false
+		end
+		
+		local character = find.player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		
+		if not humanoid or not root then
+			return false
+		end
+		
+		actives["move"] = true
+		fly(a[3], tonumber(a[4]) or 40, a[3], a[4])
+		
+		return true
 	end
 	
 	return false
