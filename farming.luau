@@ -272,16 +272,15 @@ function farming.lockWalkSpeed()
 				
 				local slider = actives["massles_slider"]
 				if actives["massles"] then
-					for _, part in ipairs(character:GetDescendants()) do
-						if part:IsA("BasePart") then
-							part.CustomPhysicalProperties = PhysicalProperties.new(
-								slider,
-								part.CurrentPhysicalProperties.Friction,
-								part.CurrentPhysicalProperties.Elasticity,
-								part.CurrentPhysicalProperties.FrictionWeight,
-								part.CurrentPhysicalProperties.ElasticityWeight
-							)
+					local root = character and character:FindFirstChild("HumanoidRootPart")
+					if root then
+						for _, part in ipairs(character:GetDescendants()) do
+							if part:IsA("BasePart") and part ~= root then
+								part.Massless = true
+							end
 						end
+						local cur = root.CurrentPhysicalProperties
+						root.CustomPhysicalProperties = PhysicalProperties.new(slider, cur.Friction, cur.Elasticity, cur.FrictionWeight, cur.ElasticityWeight)
 					end
 				end
 
