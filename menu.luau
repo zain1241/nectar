@@ -1773,6 +1773,14 @@ function menu.dop_create()
 								end
 							end,
 						},
+						{
+							type = "slider",
+							text = "Speed",
+							key = "walkspeed",
+							min = 1,
+							max = 120,
+							step = 80,
+						},
 					},
 				},
 				{
@@ -1783,6 +1791,15 @@ function menu.dop_create()
 						{ type = "button", text = "Bubble", key = "bubble", callback = farming.farm },
 						{ type = "button", text = "Priority Tokens", key = "no_priotiy_tokens", callback = farming.farm },
 						{ type = "button", text = "Priority Drops", key = "no_priority_drops", callback = farming.farm },
+						{ type = "button", text = "Massles", key = "massles" },
+						{
+							type = "slider",
+							text = "Mssles(1stud)",
+							key = "massles_slider",
+							min = 1,
+							max = 10,
+							step = 2,
+						},
 
 						{
 							type = "addlistchose",
@@ -1857,7 +1874,7 @@ function menu.dop_create()
 							key = "backpack",
 							min = 10,
 							max = 100,
-							step = 1,
+							step = 80,
 						},
 						{
 							type = "slider",
@@ -1865,7 +1882,7 @@ function menu.dop_create()
 							key = "convert_interval",
 							min = 1,
 							max = 120,
-							step = 1,
+							step = 15,
 						},
 						--{
 						--	type = "addlistchose",
@@ -1881,6 +1898,23 @@ function menu.dop_create()
 						--},
 					},
 				},
+				--{
+				--	--settings
+				--	name = "Other",
+				--	opened = true,
+				--	--
+				--	items = {
+				--		{ type = "button", text = "Massles", key = "massles" },
+				--		{
+				--			type = "slider",
+				--			text = "massles(1stud)",
+				--			key = "massles_slider",
+				--			min = 1,
+				--			max = 10,
+				--			step = 1,
+				--		},
+				--	},
+				--},
 			},
 		},
 		
