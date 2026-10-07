@@ -417,6 +417,11 @@ function farming.sprout(...)
 			actives["field"] = farming.__sproutOrigField
 			farming.__sproutOrigField = nil
 		end
+		
+		local targetField = actives["field"]
+		if targetField and targetField ~= sField then
+			mod.movement.move("go_to_field", actives["walkspeed"], targetField, function() end)
+		end
 	end
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
@@ -424,6 +429,10 @@ function farming.sprout(...)
 		if sproutId ~= farming.__sproutId or actives["auto_farm"] ~= true then
 			farming.sproutActive = false
 			return
+		end
+		
+		if actives["sprinkler"] then
+			farming.sprinkler(true)
 		end
 
 		local info = mod.convert.get_pollen_info()
@@ -927,7 +936,7 @@ function farming.farm(...)
 	end
 end
 
-print(444444)
+print(1111)
 
 task.spawn(function()
 	task.wait(2)
