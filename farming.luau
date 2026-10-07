@@ -428,7 +428,7 @@ function farming.sprout(...)
 		end
 
 		farming.sproutActive = false
-		actives["move"] = false
+		actives["move"] = true
 
 		local stop = tick() + 20
 		while tick() < stop and sproutId == farming.__sproutId and actives["auto_farm"] == true do
@@ -671,6 +671,7 @@ function farming.farm(...)
 		
 		local lastField = nil
 		while actives["auto_farm"] == true do
+			actives["move"] = true
 			
 			if find.player.Character ~= character then
 				break
@@ -701,6 +702,7 @@ function farming.farm(...)
 			end
 			
 			if not field then
+				task.wait(.1)
 				continue
 			end
 			
@@ -970,7 +972,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(4444444)
 
 task.spawn(function()
 	task.wait(2)
