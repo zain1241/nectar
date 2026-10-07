@@ -377,13 +377,10 @@ function farming.sprout(...)
 		return sprout.Position
 	end
 	
-	local function field(...)
-		local a = {...}
+	local function getZone(pos)
 		local zones = workspace:FindFirstChild("FlowerZones")
-		if not zones then
-			return
-		end
-		
+		if not zones then return nil end
+
 		for _, f in ipairs(zones:GetChildren()) do
 			local cf, sz
 			if f:IsA("BasePart") then
@@ -393,102 +390,99 @@ function farming.sprout(...)
 				if ok then cf, sz = c, s end
 			end
 			if cf then
-				local p = cf:PointToObjectSpace(a[1])
+				local p = cf:PointToObjectSpace(pos)
 				if math.abs(p.X) <= sz.X / 2 and math.abs(p.Z) <= sz.Z / 2 then
 					return f.Name
 				end
 			end
 		end
-		
-		local function finish()
-			local sField = field(position)
-			if sField then
-				actives["field"] = sField
-			end
-			
-			farming.sproutActive = false
-			actives["move"] = false
-			
-			local stop = tick() + 20
-			while tick() < stop and sproutId == farming.__sproutId and actives["auto_farm"] == true do
-				task.wait(.2)
-			end
-			
-			if sproutId == farming.__sproutId and actives["auto_farm"] == true and farming.__sproutOrigField then
-				actives["field"] = farming.__sproutOrigField
-				farming.__sproutOrigField = nil
-			end
+		return nil
+	end
+
+	local function finish()
+		local sField = getZone(position)
+		if sField then
+			actives["field"] = sField
 		end
-		
-		mod.movement.move("move", actives["walkspeed"], position, function()
-			task.wait(2)
-			if sproutId ~= farming.__sproutId or actives["auto_farm"] ~= true then
-				farming.sproutActive = false
-				return
-			end
-			
-			local info = mod.convert.get_pollen_info()
-			local thr  = actives["backpack"] or 80
 
-			if info and info.percent >= thr then
-				local hivePos = select(1, farming.getHive())
-				if hivePos then
-					farming.__pendingSprout = sprout
-					mod.movement.move("hive", actives["walkspeed"], hivePos, function()
-						mod.convert.convert()
-						local wStart = tick()
-						while tick() - wStart < 600 do
-							if actives["auto_farm"] ~= true then break end
-							local inf = mod.convert.get_pollen_info()
-							if not inf or inf.pollen <= 0 then
-								task.wait(1.5)
-								break
-							end
-							task.wait(0.5)
-						end
-						if sproutId == farming.__sproutId then
-							farming.sproutActive = false
-						end
-					end)
-					return
-				end
-				farming.__pendingSprout = nil
-			end
-			
-			local speed = math.min(tonumber(actives["walkspeed"]) or 40, 22)
-			local target, nextPickAt = nil, 0
-			
-			while sproutId == farming.__sproutId and actives["auto_farm"] == true and sprout.Parent and actives["sprout"] do
-				local spoutPos = getPos()
-				if not spoutPos then
-					break
-				end
-				
-				local center = Vector3.new(spoutPos.X, root.Position.Y, spoutPos.Z)
-				local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5 and tick() >= nextPickAt)
+		farming.sproutActive = false
+		actives["move"] = false
 
-				if stale then
-					local ang = find.random:NextNumber(0, math.pi * 2)
-					local t = find.random:NextNumber() ^ 0.6
-					local r = 3 + (40 - 3) * t
-					target = Vector3.new(
-						center.X + math.cos(ang) * r,
-						root.Position.Y,
-						center.Z + math.sin(ang) * r
-					)
-					nextPickAt = tick() + 0.5
-				end
+		local stop = tick() + 20
+		while tick() < stop and sproutId == farming.__sproutId and actives["auto_farm"] == true do
+			task.wait(.2)
+		end
 
-				humanoid.WalkSpeed = speed
-				pcall(function() humanoid:MoveTo(target) end)
-				task.wait(0.08)
-			end
-			
-			finish()
-		end)
+		if sproutId == farming.__sproutId and actives["auto_farm"] == true and farming.__sproutOrigField then
+			actives["field"] = farming.__sproutOrigField
+			farming.__sproutOrigField = nil
+		end
 	end
 	
-	field(position)
+	mod.movement.move("move", actives["walkspeed"], position, function()
+		task.wait(2)
+		if sproutId ~= farming.__sproutId or actives["auto_farm"] ~= true then
+			farming.sproutActive = false
+			return
+		end
+
+		local info = mod.convert.get_pollen_info()
+		local thr  = actives["backpack"] or 80
+
+		if info and info.percent >= thr then
+			local hivePos = select(1, farming.getHive())
+			if hivePos then
+				farming.__pendingSprout = sprout
+				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
+					mod.convert.convert()
+					local wStart = tick()
+					while tick() - wStart < 600 do
+						if actives["auto_farm"] ~= true then break end
+						local inf = mod.convert.get_pollen_info()
+						if not inf or inf.pollen <= 0 then
+							task.wait(1.5)
+							break
+						end
+						task.wait(0.5)
+					end
+					if sproutId == farming.__sproutId then
+						farming.sproutActive = false
+					end
+				end)
+				return
+			end
+			farming.__pendingSprout = nil
+		end
+
+		local speed = math.min(tonumber(actives["walkspeed"]) or 40, 22)
+		local target, nextPickAt = nil, 0
+
+		while sproutId == farming.__sproutId and actives["auto_farm"] == true and sprout.Parent and actives["sprout"] do
+			local spoutPos = getPos()
+			if not spoutPos then break end
+
+			local center = Vector3.new(spoutPos.X, root.Position.Y, spoutPos.Z)
+			local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5 and tick() >= nextPickAt)
+
+			if stale then
+				local ang = find.random:NextNumber(0, math.pi * 2)
+				local t = find.random:NextNumber() ^ 0.6
+				local r = 3 + (40 - 3) * t
+				target = Vector3.new(
+					center.X + math.cos(ang) * r,
+					root.Position.Y,
+					center.Z + math.sin(ang) * r
+				)
+				nextPickAt = tick() + 0.5
+			end
+
+			humanoid.WalkSpeed = speed
+			pcall(function() humanoid:MoveTo(target) end)
+			task.wait(0.08)
+		end
+
+		finish()
+	end)
 end
 
 function farming.farm(...)
@@ -933,7 +927,7 @@ function farming.farm(...)
 	end
 end
 
-print(44444)
+print(444444)
 
 task.spawn(function()
 	task.wait(2)
