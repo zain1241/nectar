@@ -172,7 +172,7 @@ data.actives = {
 	bubble_priority = 1,
 	sprout = false,
 	massles = true,
-	massles_slider = 1,
+	massles_slider = 2,
 	no_priotiy_tokens = true,
 	no_priority_drops = true,
 	
