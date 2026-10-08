@@ -142,41 +142,76 @@ function farming.sprinkler(...)
 	local a = {...}
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
 	if not humanoid then
 		return false
 	end
-
 	if actives["sprinkler"] ~= true then
 		return false
 	end
-
 	if sprinklerPlace then
 		return false
 	end
-	
+
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
-	local command = events:FindFirstChild("PlayerActivesCommand")
-	if not events or not command then
+	if not events then
 		return false
 	end
-	
+	local command = events:FindFirstChild("PlayerActivesCommand")
+	if not command then
+		return false
+	end
+
 	sprinklerPlace = true
-	
 	local ok, err = pcall(function()
 		command:FireServer({Name = "Sprinkler Builder"})
 	end)
-	
 	if not ok then
-		wait(err)
+		warn("sprinkler failed", err)
 	end
-	
-	task.delay(1, function()
-		sprinklerPlace = false
-	end)
-	
+
+	task.delay(1, function() sprinklerPlace = false end)
 	return ok
 end
+
+--function farming.sprinkler(...)
+--	local a = {...}
+--	local character = find.player.Character
+--	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+--	if not humanoid then
+--		return false
+--	end
+
+--	if actives["sprinkler"] ~= true then
+--		return false
+--	end
+
+--	if sprinklerPlace then
+--		return false
+--	end
+	
+--	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
+--	local command = events:FindFirstChild("PlayerActivesCommand")
+--	if not events or not command then
+--		return false
+--	end
+	
+--	sprinklerPlace = true
+	
+--	local ok, err = pcall(function()
+--		command:FireServer({Name = "Sprinkler Builder"})
+--	end)
+	
+--	if not ok then
+--		wait(err)
+--	end
+	
+--	task.delay(1, function()
+--		sprinklerPlace = false
+--	end)
+	
+--	return ok
+--end
 
 function farming.getHive()
 	local character = find.player.Character
@@ -382,6 +417,7 @@ function farming.sprout(...)
 	farming.__sproutId = farming.__sproutId + 1
 	local sproutId = farming.__sproutId
 	farming.sproutActive = true
+	farming.__sproutStartTime = tick()
 	farming.__lastSproutTime = tick()
 	
 	table.clear(queue["auto_farm"])
@@ -479,7 +515,7 @@ function farming.sprout(...)
 				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
 					mod.convert.convert()
 					local wStart = tick()
-					while tick() - wStart < 600 do
+					while tick() - wStart < 60 do
 						if actives["auto_farm"] ~= true then break end
 						local inf = mod.convert.get_pollen_info()
 						if not inf or inf.pollen <= 0 then
@@ -680,10 +716,27 @@ function farming.farm(...)
 				break
 			end
 			
+			--if actives["sprout"] and not farming.sproutActive then
+			--	farming.sprout(true)
+			--end
+			
 			if actives["sprout"] and not farming.sproutActive then
-				farming.sprout(true)
+				local ok, err = pcall(farming.sprout, true)
+				if not ok then
+					warn("sprout", err)
+					farming.sproutActive     = false
+					farming.__sproutStartTime = nil
+				end
 			end
+			
 			if farming.sproutActive then
+				if tick() - (farming.__sproutStartTime or tick()) > 90 then
+					farming.sproutActive = false
+					farming.__pendingSprout = nil
+					farming.__sproutOrigField = nil
+					farming.__sproutId = (farming.__sproutId or 0) + 1
+					actives["move"] = true
+				end
 				task.wait(0.1)
 				continue
 			end
@@ -972,7 +1025,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
@@ -1000,7 +1053,13 @@ local function respawn(...)
 		farmingActive = false
 		actives["move"] = false
 		lastConvertTime = tick()
-		
+
+		farming.sproutActive = false
+		farming.__pendingSprout = nil
+		farming.__sproutOrigField = nil
+		farming.__sproutStartTime = nil
+		farming.__sproutId = (farming.__sproutId or 0) + 1
+
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
 		
