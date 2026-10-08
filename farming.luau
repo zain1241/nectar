@@ -785,52 +785,75 @@ function farming.puffsrooms(...)
 			pcall(function() humanoid:MoveTo(cTarget) end)
 			task.wait(0.08)
 		end
-		
-		if puffId == farming.__puffId then
-			farming.puffActive = false
-			farming.__puffStartTime = nil
-		end
 
 		if actives["auto_farm"] ~= true or not actives["puffshrooms"] then
+			if puffId == farming.__puffId then
+				farming.puffActive = false
+				farming.__puffStartTime = nil
+			end
 			return
 		end
 		
 		local nextShroom = listShrooms()[1]
 		if nextShroom then
-			task.spawn(function()
-				task.wait(0.3)
-				farming.puffsrooms(true)
-			end)
+			task.wait(0.3)
+
+			if puffId ~= farming.__puffId or actives["auto_farm"] ~= true then
+				return
+			end
+			
+			farming.puffActive     = false
+			farming.__puffStartTime = nil
+			farming.puffsrooms(true)
 			return
 		end
 		
-		task.spawn(function()
-			local waitStart = tick()
-			local maxWait = tonumber(actives["puff_wait_time"]) or 60
-			while tick() - waitStart < maxWait do
-				if actives["auto_farm"] ~= true then return end
-				task.wait(1)
-				if listShrooms()[1] then
-					farming.puffsrooms(true)
-					return
+		local waitStart = tick()
+		local maxWait   = tonumber(actives["puff_wait_time"]) or 60
+		local foundNew  = false
+
+		while tick() - waitStart < maxWait do
+			if actives["auto_farm"] ~= true or puffId ~= farming.__puffId then
+				break
+			end
+			task.wait(1)
+			if puffId == farming.__puffId then
+				farming.__puffStartTime = tick()
+			end
+			if listShrooms()[1] then
+				foundNew = true
+				break
+			end
+		end
+		
+		if puffId == farming.__puffId then
+			farming.puffActive      = false
+			farming.__puffStartTime = nil
+		end
+
+		if actives["auto_farm"] ~= true or puffId ~= farming.__puffId then
+			return
+		end
+		
+		if foundNew then
+			farming.puffsrooms(true)
+			return
+		end
+		
+		local returnField = farming.__puffOrigField or actives["field"]
+		farming.__puffOrigField = nil
+
+		if returnField and actives["auto_farm"] == true then
+			actives["field"] = returnField
+			mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
+				if actives["mask"] ~= "None" then
+					mod.convert.equip_mask(actives["mask"])
 				end
-			end
-			
-			local returnField = farming.__puffOrigField or actives["field"]
-			farming.__puffOrigField = nil
-			
-			if returnField and actives["auto_farm"] == true then
-				actives["field"] = returnField
-				mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
-					if actives["mask"] ~= "None" then
-						mod.convert.equip_mask(actives["mask"])
-					end
-					if actives["sprinkler"] then
-						farming.sprinkler(true)
-					end
-				end)
-			end
-		end)
+				if actives["sprinkler"] then
+					farming.sprinkler(true)
+				end
+			end)
+		end
 	end)
 end
 
@@ -1034,11 +1057,13 @@ function farming.farm(...)
 			end
 			if farming.puffActive then
 				if tick() - (farming.__puffStartTime or tick()) > 30 then
-					farming.puffActive      = false
-					farming.__pendingPuff   = nil
-					farming.__puffStartTime = nil
-					farming.__puffId        = (farming.__puffId or 0) + 1
-					actives["move"] = true
+					if #queue["auto_farm"] == 0 and not farming.__puffWaiting then
+						farming.puffActive      = false
+						farming.__pendingPuff   = nil
+						farming.__puffStartTime = nil
+						farming.__puffId        = (farming.__puffId or 0) + 1
+						actives["move"] = true
+					end
 				end
 				task.wait(0.1)
 				continue
@@ -1349,7 +1374,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
