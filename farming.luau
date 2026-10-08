@@ -659,11 +659,43 @@ function farming.puffsrooms(...)
 	table.clear(queue["tokens"])
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
-		task.wait(1)
+		task.wait(2)
 		
 		if puffId ~= farming.__puffId or actives["auto_farm"] ~= true then
 			farming.puffActive = false
 			return
+		end
+		
+		if actives["sprinkler"] then
+			farming.sprinkler(true)
+		end
+		
+		local info = mod.convert.get_pollen_info()
+		local thr  = actives["backpack"] or 80
+
+		if info and info.percent >= thr then
+			local hivePos = select(1, farming.getHive())
+			if hivePos then
+				farming.__pendingPuff = shroom
+				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
+					mod.convert.convert()
+					local wStart = tick()
+					while tick() - wStart < 60 do
+						if actives["auto_farm"] ~= true then break end
+						local inf = mod.convert.get_pollen_info()
+						if not inf or inf.pollen <= 0 then
+							task.wait(1.5)
+							break
+						end
+						task.wait(0.5)
+					end
+					if puffId == farming.__puffId then
+						farming.puffActive = false
+					end
+				end)
+				return
+			end
+			farming.__pendingPuff = nil
 		end
 		
 		local speed = math.min(tonumber(actives["walkspeed"]) or 40, 22)
@@ -1253,7 +1285,7 @@ function farming.farm(...)
 	end
 end
 
-print(32424234)
+print(123123123123)
 
 task.spawn(function()
 	task.wait(2)
