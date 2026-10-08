@@ -160,6 +160,12 @@ function farming.sprinkler(...)
 	if not command then
 		return false
 	end
+	
+	local now = tick()
+	if now - (farming.__lastSprinklerAt or 0) < 4 then
+		return
+	end
+	farming.__lastSprinklerAt = now
 
 	sprinklerPlace = true
 	local ok, err = pcall(function()
@@ -456,6 +462,11 @@ function farming.sprout(...)
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
 		task.wait(2)
+		
+		if movement.stop then
+			pcall(movement.stop)
+		end
+		
 		if sproutId ~= farming.__sproutId or actives["auto_farm"] ~= true then
 			farming.sproutActive = false
 			return
@@ -475,7 +486,7 @@ function farming.sprout(...)
 				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
 					mod.convert.convert()
 					local wStart = tick()
-					while tick() - wStart < 60 do
+					while tick() - wStart < 45 do
 						if actives["auto_farm"] ~= true then break end
 						local inf = mod.convert.get_pollen_info()
 						if not inf or inf.pollen <= 0 then
@@ -495,6 +506,14 @@ function farming.sprout(...)
 
 		local speed = math.min(tonumber(actives["walkspeed"]) or 40, 22)
 		local target, nextPickAt = nil, 0
+		
+		local state = humanoid:GetState()
+		if humanoid.PlatformStand or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll then
+			humanoid.PlatformStand = false
+			pcall(function()
+				humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end)
+		end
 
 		while sproutId == farming.__sproutId and actives["auto_farm"] == true and sprout.Parent and actives["sprout"] do
 			local spoutPos = getPos()
@@ -661,6 +680,10 @@ function farming.puffsrooms(...)
 	mod.movement.move("move", actives["walkspeed"], position, function()
 		task.wait(2)
 		
+		if movement.stop then
+			pcall(movement.stop)
+		end
+		
 		if puffId ~= farming.__puffId or actives["auto_farm"] ~= true then
 			farming.puffActive = false
 			return
@@ -680,7 +703,7 @@ function farming.puffsrooms(...)
 				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
 					mod.convert.convert()
 					local wStart = tick()
-					while tick() - wStart < 60 do
+					while tick() - wStart < 45 do
 						if actives["auto_farm"] ~= true then break end
 						local inf = mod.convert.get_pollen_info()
 						if not inf or inf.pollen <= 0 then
@@ -700,6 +723,14 @@ function farming.puffsrooms(...)
 		
 		local speed = math.min(tonumber(actives["walkspeed"]) or 40, 22)
 		local target, nextPickAt = nil, 0
+		
+		local state = humanoid:GetState()
+		if humanoid.PlatformStand or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll then
+			humanoid.PlatformStand = false
+			pcall(function()
+				humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end)
+		end
 		
 		while puffId == farming.__puffId and actives["auto_farm"] == true and shroom.Parent and actives["puffshrooms"] do
 			local spoutPos = getPos(shroom)
@@ -945,6 +976,9 @@ function farming.farm(...)
 		end
 		
 		local lastField = nil
+		local lastRootPos = root.Position
+		local stuckTicks = 0
+		
 		while actives["auto_farm"] == true do
 			actives["move"] = true
 			
@@ -955,8 +989,38 @@ function farming.farm(...)
 				break
 			end
 			
+			if (root.Position - lastRootPos).Magnitude < 0.5 then
+				stuckTicks += 1
+			else
+				stuckTicks = 0
+			end
+			lastRootPos = root.Position
+			
+			if stuckTicks > 600 and (farming.sproutActive or farming.puffActive) then
+				farming.sproutActive = false
+				farming.__pendingSprout = nil
+				farming.__sproutId = (farming.__sproutId or 0) + 1
+				farming.puffActive = false
+				farming.__pendingPuff = nil
+				farming.__puffId = (farming.__puffId or 0) + 1
+				if movement.stop then pcall(movement.stop) end
+				stuckTicks = 0
+			end
+			
+			local state = humanoid:GetState()
+			if humanoid.PlatformStand or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll then
+				humanoid.PlatformStand = false
+				pcall(function()
+					humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+				end)
+			end
+			
 			--if actives["sprout"] and not farming.sproutActive then
 			--	farming.sprout(true)
+			--end
+			
+			--if movement.stop then
+			--	pcall(movement.stop)
 			--end
 			
 			if actives["puffshrooms"] and not farming.puffActive then
@@ -969,7 +1033,7 @@ function farming.farm(...)
 				end
 			end
 			if farming.puffActive then
-				if tick() - (farming.__puffStartTime or tick()) > 180 then
+				if tick() - (farming.__puffStartTime or tick()) > 30 then
 					farming.puffActive      = false
 					farming.__pendingPuff   = nil
 					farming.__puffStartTime = nil
@@ -990,7 +1054,7 @@ function farming.farm(...)
 			end
 			
 			if farming.sproutActive then
-				if tick() - (farming.__sproutStartTime or tick()) > 90 then
+				if tick() - (farming.__sproutStartTime or tick()) > 30 then
 					farming.sproutActive = false
 					farming.__pendingSprout = nil
 					farming.__sproutOrigField = nil
@@ -1285,7 +1349,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123123123)
+print(4444444)
 
 task.spawn(function()
 	task.wait(2)
