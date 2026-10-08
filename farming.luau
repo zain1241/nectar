@@ -515,7 +515,7 @@ function farming.sprout(...)
 				nextPickAt = tick() + 0.5
 			end
 
-			humanoid.WalkSpeed = speed
+			--humanoid.WalkSpeed = speed
 			pcall(function() humanoid:MoveTo(target) end)
 			task.wait(0.08)
 		end
@@ -690,7 +690,7 @@ function farming.puffsrooms(...)
 				nextPickAt = tick() + 0.5
 			end
 			
-			humanoid.WalkSpeed = speed
+			--humanoid.WalkSpeed = speed
 			pcall(function() humanoid:MoveTo(target) end)
 			task.wait(0.08)
 		end
@@ -718,7 +718,7 @@ function farming.puffsrooms(...)
 				cNext = tick() + 0.4
 			end
 			
-			humanoid.WalkSpeed = speed
+			--humanoid.WalkSpeed = speed
 			pcall(function() humanoid:MoveTo(cTarget) end)
 			task.wait(0.08)
 		end
@@ -1253,7 +1253,7 @@ function farming.farm(...)
 	end
 end
 
-print(14141411414)
+print(32424234)
 
 task.spawn(function()
 	task.wait(2)
