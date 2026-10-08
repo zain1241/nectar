@@ -173,46 +173,6 @@ function farming.sprinkler(...)
 	return ok
 end
 
---function farming.sprinkler(...)
---	local a = {...}
---	local character = find.player.Character
---	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
---	if not humanoid then
---		return false
---	end
-
---	if actives["sprinkler"] ~= true then
---		return false
---	end
-
---	if sprinklerPlace then
---		return false
---	end
-	
---	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
---	local command = events:FindFirstChild("PlayerActivesCommand")
---	if not events or not command then
---		return false
---	end
-	
---	sprinklerPlace = true
-	
---	local ok, err = pcall(function()
---		command:FireServer({Name = "Sprinkler Builder"})
---	end)
-	
---	if not ok then
---		wait(err)
---	end
-	
---	task.delay(1, function()
---		sprinklerPlace = false
---	end)
-	
---	return ok
---end
-
 function farming.getHive()
 	local character = find.player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -564,6 +524,253 @@ function farming.sprout(...)
 	end)
 end
 
+function farming.puffsrooms(...)
+	local a = {...}
+	
+	if not a[1] then
+		return
+	end
+	
+	if farming.puffActive then
+		return
+	end
+	
+	farming.__puffId = farming.__puffId or 0
+	farming.__lastPuffTime = farming.__lastPuffTime or 0
+	
+	local character = find.player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root then
+		return
+	end
+	
+	local happenings = workspace:FindFirstChild("Happenings")
+	local container = happenings and happenings:FindFirstChild("Puffshrooms")
+	if not container then
+		return
+	end
+	
+	local PUFF_RARITY = { mythic = 5, legendary = 4, epic = 3, rare = 2, common = 1 }
+	
+	local function puffRarity(shroom)
+		local n = string.lower(shroom.Name or "")
+		local order = { "mythic", "legendary", "epic", "rare", "common" }
+		for _, r in ipairs(order) do
+			if string.find(n, r, 1, true) then
+				return r, PUFF_RARITY[r]
+			end
+		end
+		return "common", PUFF_RARITY.common
+	end
+	
+	local function listShrooms()
+		local list = {}
+		for _, obj in ipairs(container:GetChildren()) do
+			if obj:IsA("Model") or obj:IsA("BasePart") then
+				table.insert(list, obj)
+			end
+		end
+		
+		table.sort(list, function(x, y)
+			local _, px = puffRarity(x)
+			local _, py = puffRarity(y)
+			if px ~= py then
+				return px > py
+			end
+			return x.Name < y.Name
+		end)
+		return list
+	end
+	
+	local function getPos(shroom)
+		if not shroom or not shroom.Parent then return nil end
+		if shroom:IsA("Model") then
+			local p = shroom.PrimaryPart or shroom:FindFirstChildWhichIsA("BasePart", true)
+			return p and p.Position
+		end
+		return shroom.Position
+	end
+	
+	local shroom, position, resumed
+	if farming.__pendingPuff then
+		if farming.__pendingPuff.Parent then
+			shroom = farming.__pendingPuff
+			resumed = true
+			farming.__pendingPuff = nil
+		else
+			farming.__pendingPuff = nil
+			shroom = listShrooms()[1]
+			if not shroom then
+				task.spawn(function()
+					local waitStart = tick()
+					local maxWait = tonumber(actives["puff_wait_time"]) or 60
+					while tick() - waitStart < maxWait do
+						if actives["auto_farm"] ~= true then return end
+						task.wait(1)
+						if listShrooms()[1] then
+							farming.puffsrooms(true)
+							return
+						end
+					end
+					local returnField = farming.__puffOrigField or actives["field"]
+					farming.__puffOrigField = nil
+					if returnField then
+						actives["field"] = returnField
+						mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
+							if actives["mask"] ~= "None" then
+								mod.convert.equip_mask(actives["mask"])
+							end
+							if actives["sprinkler"] then
+								farming.sprinkler(true)
+							end
+						end)
+					end
+				end)
+				return
+			end
+		end
+	else
+		if tick() - farming.__lastPuffTime >= 3 then
+			shroom = listShrooms()[1]
+		end
+	end
+	
+	if not shroom then
+		return
+	end
+	
+	position = getPos(shroom)
+	if not position then
+		return
+	end
+
+	if not resumed then
+		farming.__puffOrigField = actives["field"]
+	end
+	
+	farming.__puffId = farming.__puffId + 1
+	local puffId = farming.__puffId
+	farming.puffActive = true
+	farming.__puffStartTime = tick()
+	farming.__lastPuffTime = tick()
+
+	table.clear(queue["auto_farm"])
+	table.clear(queue["tokens"])
+	
+	mod.movement.move("move", actives["walkspeed"], position, function()
+		task.wait(1)
+		
+		if puffId ~= farming.__puffId or actives["auto_farm"] ~= true then
+			farming.puffActive = false
+			return
+		end
+		
+		local speed = math.min(tonumber(actives["walkspeed"]) or 40, 22)
+		local target, nextPickAt = nil, 0
+		
+		while puffId == farming.__puffId and actives["auto_farm"] == true and shroom.Parent and actives["puffshrooms"] do
+			local spoutPos = getPos(shroom)
+			if not spoutPos then
+				break
+			end
+			
+			local center = Vector3.new(spoutPos.X, root.Position.Y, spoutPos.Z)
+			local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5 and tick() >= nextPickAt)
+			
+			if stale then
+				local ang = find.random:NextNumber(0, math.pi * 2)
+				local t   = find.random:NextNumber() ^ 0.6
+				local r   = 3 + (15 - 3) * t
+				target = Vector3.new(
+					center.X + math.cos(ang) * r,
+					root.Position.Y,
+					center.Z + math.sin(ang) * r
+				)
+				nextPickAt = tick() + 0.5
+			end
+			
+			humanoid.WalkSpeed = speed
+			pcall(function() humanoid:MoveTo(target) end)
+			task.wait(0.08)
+		end
+		
+		local dropPos = position
+		local collectEnd = tick() + 3
+		local cTarget, cNext = nil, 0
+		
+		while tick() < collectEnd and actives["auto_farm"] == true and puffId == farming.__puffId do
+			if not root or not root.Parent then
+				break
+			end
+			
+			local center = Vector3.new(dropPos.X, root.Position.Y, dropPos.Z)
+			local stale = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5 and tick() >= cNext)
+			
+			if stale then
+				local ang = find.random:NextNumber(0, math.pi * 2)
+				local r   = 3 + 8 * find.random:NextNumber()
+				cTarget = Vector3.new(
+					center.X + math.cos(ang) * r,
+					root.Position.Y,
+					center.Z + math.sin(ang) * r
+				)
+				cNext = tick() + 0.4
+			end
+			
+			humanoid.WalkSpeed = speed
+			pcall(function() humanoid:MoveTo(cTarget) end)
+			task.wait(0.08)
+		end
+		
+		if puffId == farming.__puffId then
+			farming.puffActive = false
+			farming.__puffStartTime = nil
+		end
+
+		if actives["auto_farm"] ~= true or not actives["puffshrooms"] then
+			return
+		end
+		
+		local nextShroom = listShrooms()[1]
+		if nextShroom then
+			task.spawn(function()
+				task.wait(0.3)
+				farming.puffsrooms(true)
+			end)
+			return
+		end
+		
+		task.spawn(function()
+			local waitStart = tick()
+			local maxWait = tonumber(actives["puff_wait_time"]) or 60
+			while tick() - waitStart < maxWait do
+				if actives["auto_farm"] ~= true then return end
+				task.wait(1)
+				if listShrooms()[1] then
+					farming.puffsrooms(true)
+					return
+				end
+			end
+			
+			local returnField = farming.__puffOrigField or actives["field"]
+			farming.__puffOrigField = nil
+			
+			if returnField and actives["auto_farm"] == true then
+				actives["field"] = returnField
+				mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
+					if actives["mask"] ~= "None" then
+						mod.convert.equip_mask(actives["mask"])
+					end
+					if actives["sprinkler"] then
+						farming.sprinkler(true)
+					end
+				end)
+			end
+		end)
+	end)
+end
+
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
@@ -719,6 +926,27 @@ function farming.farm(...)
 			--if actives["sprout"] and not farming.sproutActive then
 			--	farming.sprout(true)
 			--end
+			
+			if actives["puffshrooms"] and not farming.puffActive then
+				local ok, err = pcall(farming.puffsrooms, true)
+				if not ok then
+					warn("puff", err)
+					farming.puffActive       = false
+					farming.__puffStartTime  = nil
+					farming.__pendingPuff    = nil
+				end
+			end
+			if farming.puffActive then
+				if tick() - (farming.__puffStartTime or tick()) > 180 then
+					farming.puffActive      = false
+					farming.__pendingPuff   = nil
+					farming.__puffStartTime = nil
+					farming.__puffId        = (farming.__puffId or 0) + 1
+					actives["move"] = true
+				end
+				task.wait(0.1)
+				continue
+			end
 			
 			if actives["sprout"] and not farming.sproutActive then
 				local ok, err = pcall(farming.sprout, true)
@@ -1025,7 +1253,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(14141411414)
 
 task.spawn(function()
 	task.wait(2)
@@ -1053,6 +1281,12 @@ local function respawn(...)
 		farmingActive = false
 		actives["move"] = false
 		lastConvertTime = tick()
+		
+		farming.puffActive = false
+		farming.__pendingPuff = nil
+		farming.__puffOrigField = nil
+		farming.__puffStartTime = nil
+		farming.__puffId = (farming.__puffId or 0) + 1
 
 		farming.sproutActive = false
 		farming.__pendingSprout = nil
