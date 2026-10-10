@@ -268,10 +268,11 @@ function convert.autoHive(...)
 	
 	--print(newPos)
 	
+	if farming then farming.__goingToHive = true end
 	movement.move("hive", actives["walkspeed"], newPos, function()
+		if farming then farming.__goingToHive = false end
 		task.wait(1)
 		convert.convert()
-		--print(7)
 	end, newId)
 end
 
