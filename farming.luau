@@ -429,7 +429,6 @@ function farming.sprout(...)
 			actives["field"] = sField
 		end
 
-		farming.sproutActive = false
 		actives["move"] = true
 
 		local stop = tick() + 20
@@ -449,14 +448,19 @@ function farming.sprout(...)
 		if targetField and targetField ~= sField then
 			mod.movement.move("go_to_field", actives["walkspeed"], targetField, function()
 				if actives["mask"] ~= "None" then
-					local mask = actives["mask"]
-					mod.convert.equip_mask(mask)
+					mod.convert.equip_mask(actives["mask"])
 				end
-
 				if actives["sprinkler"] then
 					farming.sprinkler(true)
 				end
+				if sproutId == farming.__sproutId then
+					farming.sproutActive = false
+				end
 			end)
+		else
+			if sproutId == farming.__sproutId then
+				farming.sproutActive = false
+			end
 		end
 	end
 	
@@ -827,7 +831,6 @@ function farming.puffsrooms(...)
 		end
 		
 		if puffId == farming.__puffId then
-			farming.puffActive      = false
 			farming.__puffStartTime = nil
 		end
 
@@ -846,13 +849,16 @@ function farming.puffsrooms(...)
 		if returnField and actives["auto_farm"] == true then
 			actives["field"] = returnField
 			mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
-				if actives["mask"] ~= "None" then
-					mod.convert.equip_mask(actives["mask"])
-				end
-				if actives["sprinkler"] then
-					farming.sprinkler(true)
+				if actives["mask"] ~= "None" then mod.convert.equip_mask(actives["mask"]) end
+				if actives["sprinkler"] then farming.sprinkler(true) end
+				if puffId == farming.__puffId then
+					farming.puffActive = false
 				end
 			end)
+		else
+			if puffId == farming.__puffId then
+				farming.puffActive = false
+			end
 		end
 	end)
 end
@@ -861,11 +867,16 @@ function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
 	
-	actives.move = false
 	if not status then
 		actives.move = false
 		return
 	end
+	
+	if farmingActive then
+		return
+	end
+	
+	actives.move = false
 	
 	lastConvertTime = lastConvertTime or tick()
 	--if not status then
@@ -938,395 +949,399 @@ function farming.farm(...)
 		if farmingActive then
 			return
 		end
-		
 		farmingActive = true
-		
-		local character = find.player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		local root = character and character:FindFirstChild("HumanoidRootPart")
-		if not humanoid or not root then
-			return
-		end
-		
-		actives["move"] = true
 
-		local function isTokenInField(token, field)
-			local p = field.CFrame:PointToObjectSpace(token.Position)
-			local s = field.Size / 2
-			return math.abs(p.X) <= s.X and math.abs(p.Z) <= s.Z and p.Y >= -3 and p.Y <= 15
-		end
-		
-		local function isBubble(part)
-			local n = part.Name
-			return n == "Bubble" or n == "GoldBubble"
-		end
-		
-		--local function getPriority(obj)
-		--	if isBubble(obj) then
-		--		return (tonumber(actives["bubble_priority"]) or 0) * 0.2
-		--	end
-
-		--	local tp = actives["token_priorities"] or {}
-		--	local dp = actives["drops_priorities"] or {}
-
-		--	return tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
-		--end
-		
-		local function getPriority(obj)
-			local tp = actives["token_priorities"] or {}
-			local dp = actives["drops_priorities"] or {}
-			
-			if isBubble(obj) then
-				return (tonumber(actives["bubble_priority"]) or 0) * 0.2
+		local ok, err = pcall(function()
+			local character = find.player.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if not humanoid or not root then
+				return
 			end
 			
-			local base = 1000
-			local namePrio = tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
-			local isDrop = dp[obj.Name] ~= nil
-
-			local categoryPrio = 0
-			if isDrop then
-				if not actives["no_priority_drops"] then
-					categoryPrio = 100
-				end
-			else
-				if not actives["no_priotiy_tokens"] then
-					categoryPrio = 200
-				end
-			end
-
-			return base + categoryPrio + namePrio
-		end
-		
-		local lastField = nil
-		local lastRootPos = root.Position
-		local stuckTicks = 0
-		
-		while actives["auto_farm"] == true do
 			actives["move"] = true
 			
-			if find.player.Character ~= character then
-				break
+			local function isTokenInField(token, field)
+				local p = field.CFrame:PointToObjectSpace(token.Position)
+				local s = field.Size / 2
+				return math.abs(p.X) <= s.X and math.abs(p.Z) <= s.Z and p.Y >= -3 and p.Y <= 15
 			end
-			if not humanoid or not humanoid.Parent or humanoid.Health <= 0 then
-				break
+
+			local function isBubble(part)
+				local n = part.Name
+				return n == "Bubble" or n == "GoldBubble"
 			end
-			
-			if (root.Position - lastRootPos).Magnitude < 0.5 then
-				stuckTicks += 1
-			else
-				stuckTicks = 0
-			end
-			lastRootPos = root.Position
-			
-			if stuckTicks > 600 and (farming.sproutActive or farming.puffActive) then
-				farming.sproutActive = false
-				farming.__pendingSprout = nil
-				farming.__sproutId = (farming.__sproutId or 0) + 1
-				farming.puffActive = false
-				farming.__pendingPuff = nil
-				farming.__puffId = (farming.__puffId or 0) + 1
-				if movement.stop then pcall(movement.stop) end
-				stuckTicks = 0
-			end
-			
-			local state = humanoid:GetState()
-			if humanoid.PlatformStand or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll then
-				humanoid.PlatformStand = false
-				pcall(function()
-					humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-				end)
-			end
-			
-			--if actives["sprout"] and not farming.sproutActive then
-			--	farming.sprout(true)
+
+			--local function getPriority(obj)
+			--	if isBubble(obj) then
+			--		return (tonumber(actives["bubble_priority"]) or 0) * 0.2
+			--	end
+
+			--	local tp = actives["token_priorities"] or {}
+			--	local dp = actives["drops_priorities"] or {}
+
+			--	return tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
 			--end
-			
-			--if movement.stop then
-			--	pcall(movement.stop)
-			--end
-			
-			if actives["puffshrooms"] and not farming.puffActive then
-				local ok, err = pcall(farming.puffsrooms, true)
-				if not ok then
-					warn("puff", err)
-					farming.puffActive       = false
-					farming.__puffStartTime  = nil
-					farming.__pendingPuff    = nil
+
+			local function getPriority(obj)
+				local tp = actives["token_priorities"] or {}
+				local dp = actives["drops_priorities"] or {}
+
+				if isBubble(obj) then
+					return (tonumber(actives["bubble_priority"]) or 0) * 0.2
 				end
-			end
-			if farming.puffActive then
-				if tick() - (farming.__puffStartTime or tick()) > 30 then
-					if #queue["auto_farm"] == 0 and not farming.__puffWaiting then
-						farming.puffActive      = false
-						farming.__pendingPuff   = nil
-						farming.__puffStartTime = nil
-						farming.__puffId        = (farming.__puffId or 0) + 1
-						actives["move"] = true
+
+				local base = 1000
+				local namePrio = tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
+				local isDrop = dp[obj.Name] ~= nil
+
+				local categoryPrio = 0
+				if isDrop then
+					if not actives["no_priority_drops"] then
+						categoryPrio = 100
+					end
+				else
+					if not actives["no_priotiy_tokens"] then
+						categoryPrio = 200
 					end
 				end
-				task.wait(0.1)
-				continue
+
+				return base + categoryPrio + namePrio
 			end
-			
-			if actives["sprout"] and not farming.sproutActive then
-				local ok, err = pcall(farming.sprout, true)
-				if not ok then
-					warn("sprout", err)
-					farming.sproutActive     = false
-					farming.__sproutStartTime = nil
+
+			local lastField = nil
+			local lastRootPos = root.Position
+			local stuckTicks = 0
+
+			while actives["auto_farm"] == true do
+				actives["move"] = true
+
+				if find.player.Character ~= character then
+					break
 				end
-			end
-			
-			if farming.sproutActive then
-				if tick() - (farming.__sproutStartTime or tick()) > 30 then
+				if not humanoid or not humanoid.Parent or humanoid.Health <= 0 then
+					break
+				end
+
+				if (root.Position - lastRootPos).Magnitude < 0.5 then
+					stuckTicks += 1
+				else
+					stuckTicks = 0
+				end
+				lastRootPos = root.Position
+
+				if stuckTicks > 600 and (farming.sproutActive or farming.puffActive) and not (farming.__pendingSprout or farming.__pendingPuff) then
 					farming.sproutActive = false
 					farming.__pendingSprout = nil
-					farming.__sproutOrigField = nil
 					farming.__sproutId = (farming.__sproutId or 0) + 1
-					actives["move"] = true
+					farming.puffActive = false
+					farming.__pendingPuff = nil
+					farming.__puffId = (farming.__puffId or 0) + 1
+					if movement.stop then pcall(movement.stop) end
+					stuckTicks = 0
 				end
-				task.wait(0.1)
-				continue
-			end
-			
-			local zones = workspace:FindFirstChild("FlowerZones")
-			if actives["field"] == "" or actives["field"] == false or actives["field"] == nil then
-				field = nil
-			else
-				field = zones:FindFirstChild(actives["field"])
-			end
-			
-			if actives["field"] ~= lastField then
-				lastField = actives["field"]
-				table.clear(queue["auto_farm"])
-				table.clear(queue["tokens"])
-			end
-			
-			if not field then
-				task.wait(.1)
-				continue
-			end
-			
-			if #queue["auto_farm"] == 0 then
-				local pos = randomTokens(field)
-				if not pos then
+
+				local state = humanoid:GetState()
+				if humanoid.PlatformStand or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.Ragdoll then
+					humanoid.PlatformStand = false
+					pcall(function()
+						humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+					end)
+				end
+
+				--if actives["sprout"] and not farming.sproutActive then
+				--	farming.sprout(true)
+				--end
+
+				--if movement.stop then
+				--	pcall(movement.stop)
+				--end
+
+				if actives["puffshrooms"] and not farming.puffActive then
+					local ok, err = pcall(farming.puffsrooms, true)
+					if not ok then
+						warn("puff", err)
+						farming.puffActive       = false
+						farming.__puffStartTime  = nil
+						farming.__pendingPuff    = nil
+					end
+				end
+				if farming.puffActive then
+					if tick() - (farming.__puffStartTime or tick()) > 90 and not farming.__pendingPuff then
+						if #queue["auto_farm"] == 0 and not farming.__puffWaiting then
+							farming.puffActive      = false
+							farming.__pendingPuff   = nil
+							farming.__puffStartTime = nil
+							farming.__puffId        = (farming.__puffId or 0) + 1
+							actives["move"] = true
+						end
+					end
 					task.wait(0.1)
 					continue
 				end
-				table.insert(queue["auto_farm"], { targetPos = pos, speed = walkspeed })
-			end
-			
-			local removeTable = table.remove(queue["auto_farm"], 1)
-			local collectibles = workspace:FindFirstChild("Collectibles")
-			
-			if not collectibles or not zones then
-				return print("collectibles or zones not found")
-			end
 
-			table.clear(queue["tokens"])
-			
-			if root and field then
-				if collectibles then
-					for _, v in pairs(collectibles:GetChildren()) do
-						if v:IsA("BasePart") and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
-							local prio = getPriority(v)
-							if prio > 0 then
-								table.insert(queue["tokens"], v)
-							end
-						end
+				if actives["sprout"] and not farming.sproutActive then
+					local ok, err = pcall(farming.sprout, true)
+					if not ok then
+						warn("sprout", err)
+						farming.sproutActive     = false
+						farming.__sproutStartTime = nil
 					end
 				end
 
-				if actives["bubble"] then
-					local particles = workspace:FindFirstChild("Particles")
+				if farming.sproutActive then
+					if tick() - (farming.__sproutStartTime or tick()) > 90 and not farming.__pendingSprout then
+						farming.sproutActive = false
+						farming.__pendingSprout = nil
+						farming.__sproutOrigField = nil
+						farming.__sproutId = (farming.__sproutId or 0) + 1
+						actives["move"] = true
+					end
+					task.wait(0.1)
+					continue
+				end
 
-					if particles then
-						for _, v in pairs(particles:GetChildren()) do
-							if v:IsA("BasePart") and isBubble(v) and v.Transparency < 1 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+				local zones = workspace:FindFirstChild("FlowerZones")
+				if actives["field"] == "" or actives["field"] == false or actives["field"] == nil then
+					field = nil
+				else
+					field = zones:FindFirstChild(actives["field"])
+				end
 
+				if actives["field"] ~= lastField then
+					lastField = actives["field"]
+					table.clear(queue["auto_farm"])
+					table.clear(queue["tokens"])
+				end
+
+				if not field then
+					task.wait(.1)
+					continue
+				end
+
+				if #queue["auto_farm"] == 0 then
+					local pos = randomTokens(field)
+					if not pos then
+						task.wait(0.1)
+						continue
+					end
+					table.insert(queue["auto_farm"], { targetPos = pos, speed = walkspeed })
+				end
+
+				local removeTable = table.remove(queue["auto_farm"], 1)
+				local collectibles = workspace:FindFirstChild("Collectibles")
+
+				if not collectibles or not zones then
+					return print("collectibles or zones not found")
+				end
+
+				table.clear(queue["tokens"])
+
+				if root and field then
+					if collectibles then
+						for _, v in pairs(collectibles:GetChildren()) do
+							if v:IsA("BasePart") and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
 								local prio = getPriority(v)
-
 								if prio > 0 then
 									table.insert(queue["tokens"], v)
 								end
 							end
 						end
 					end
+
+					if actives["bubble"] then
+						local particles = workspace:FindFirstChild("Particles")
+
+						if particles then
+							for _, v in pairs(particles:GetChildren()) do
+								if v:IsA("BasePart") and isBubble(v) and v.Transparency < 1 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+
+									local prio = getPriority(v)
+
+									if prio > 0 then
+										table.insert(queue["tokens"], v)
+									end
+								end
+							end
+						end
+					end
 				end
-			end
 
-			--if collectibles and field then
-			--	if root then
-			--		for _, v in pairs(collectibles:GetChildren()) do
-			--			if v:IsA("BasePart") and field and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
-			--				table.insert(queue["tokens"], v)
-			--			end
-			--		end
-			--	end
-			--end
-
-			if #queue["tokens"] > 0 then
-				if not root then
-					actives["move"] = false
-					return
-				end
-
-				--local position = root.Position
-				--local speed = removeTable.speed or actives["walkspeed"]
-				--table.sort(queue["tokens"], function(x, y)
-				--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
-				--end)
-				
-				local position = root.Position
-				local speed = removeTable.speed or actives["walkspeed"]
-				--table.sort(queue["tokens"], function(x, y)
-				--	local px, py = getPriority(x), getPriority(y)
-				--	if px ~= py then
-				--		return px > py
+				--if collectibles and field then
+				--	if root then
+				--		for _, v in pairs(collectibles:GetChildren()) do
+				--			if v:IsA("BasePart") and field and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
+				--				table.insert(queue["tokens"], v)
+				--			end
+				--		end
 				--	end
-				--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
-				--end)
-				table.sort(queue["tokens"], function(x, y)
-					local px = getPriority(x)
-					local py = getPriority(y)
+				--end
 
-					if px ~= py then
-						return px > py
+				if #queue["tokens"] > 0 then
+					if not root then
+						actives["move"] = false
+						return
 					end
 
-					local dx = (position - x.Position).Magnitude
-					local dy = (position - y.Position).Magnitude
+					--local position = root.Position
+					--local speed = removeTable.speed or actives["walkspeed"]
+					--table.sort(queue["tokens"], function(x, y)
+					--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
+					--end)
 
-					return dx < dy
-				end)
+					local position = root.Position
+					local speed = removeTable.speed or actives["walkspeed"]
+					--table.sort(queue["tokens"], function(x, y)
+					--	local px, py = getPriority(x), getPriority(y)
+					--	if px ~= py then
+					--		return px > py
+					--	end
+					--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
+					--end)
+					table.sort(queue["tokens"], function(x, y)
+						local px = getPriority(x)
+						local py = getPriority(y)
 
-				while actives["auto_farm"] and #queue["tokens"] > 0 do
-					while #queue["tokens"] > 0 do
-						local first = queue["tokens"][1]
-						if first and first.Parent and first.Transparency <= 1 and isTokenInField(first, field) then
+						if px ~= py then
+							return px > py
+						end
+
+						local dx = (position - x.Position).Magnitude
+						local dy = (position - y.Position).Magnitude
+
+						return dx < dy
+					end)
+
+					while actives["auto_farm"] and #queue["tokens"] > 0 do
+						while #queue["tokens"] > 0 do
+							local first = queue["tokens"][1]
+							if first and first.Parent and first.Transparency <= 1 and isTokenInField(first, field) then
+								break
+							end
+							table.remove(queue["tokens"], 1)
+						end
+
+						if #queue["tokens"] == 0 then
 							break
 						end
-						table.remove(queue["tokens"], 1)
+
+						local target = queue["tokens"][1]
+						if not target then
+							break
+						end
+
+						--local targetIsBubble = isBubble(target)
+						--local targetDistance = (position - target.Position).Magnitude
+
+						--if targetIsBubble and targetDistance > 25 then
+						--	for i = 2, #queue["tokens"] do
+						--		local candidate = queue["tokens"][i]
+
+						--		if not isBubble(candidate) then
+						--			local distance = (position - candidate.Position).Magnitude
+
+						--			if distance <= 25 then
+						--				target = candidate
+						--				break
+						--			end
+						--		end
+						--	end
+						--end
+
+						local tp = Vector3.new(target.Position.X, root.Position.Y, target.Position.Z)
+						local dist = (tp - root.Position).Magnitude
+
+						if dist <= 2 then
+							table.remove(queue["tokens"], 1)
+							continue
+						end
+
+						humanoid:MoveTo(tp)
+						find.prerender:Wait()
 					end
+				else
+					if removeTable.targetPos and removeTable.speed then
+						if humanoid and root then
+							local start = tick()
+							local targetPos = removeTable.targetPos
 
-					if #queue["tokens"] == 0 then
-						break
-					end
+							while tick() - start < 15 do
+								if not actives["auto_farm"] then
+									break
+								end
 
-					local target = queue["tokens"][1]
-					if not target then
-						break
-					end
-					
-					--local targetIsBubble = isBubble(target)
-					--local targetDistance = (position - target.Position).Magnitude
+								--local hasToken = false
+								--if collectibles and field then
+								--	for _, v in pairs(collectibles:GetChildren()) do
+								--		if v:IsA("BasePart") and field and isTokenInField(v, field) then
+								--			hasToken = true
+								--			break
+								--		end
+								--	end
+								--end
 
-					--if targetIsBubble and targetDistance > 25 then
-					--	for i = 2, #queue["tokens"] do
-					--		local candidate = queue["tokens"][i]
+								--if hasToken or not humanoid or not root then
+								--	break
+								--end
 
-					--		if not isBubble(candidate) then
-					--			local distance = (position - candidate.Position).Magnitude
+								if #queue["tokens"] > 0 then
+									break
+								end
 
-					--			if distance <= 25 then
-					--				target = candidate
-					--				break
-					--			end
-					--		end
-					--	end
-					--end
+								if not humanoid or not root then
+									break
+								end
 
-					local tp = Vector3.new(target.Position.X, root.Position.Y, target.Position.Z)
-					local dist = (tp - root.Position).Magnitude
+								local flat = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
+								if (flat - root.Position).Magnitude <= 1.5 then
+									break
+								end
 
-					if dist <= 2 then
-						table.remove(queue["tokens"], 1)
-						continue
-					end
-					
-					humanoid:MoveTo(tp)
-					find.prerender:Wait()
-				end
-			else
-				if removeTable.targetPos and removeTable.speed then
-					if humanoid and root then
-						local start = tick()
-						local targetPos = removeTable.targetPos
-
-						while tick() - start < 15 do
-							if not actives["auto_farm"] then
-								break
-							end
-
-							--local hasToken = false
-							--if collectibles and field then
-							--	for _, v in pairs(collectibles:GetChildren()) do
-							--		if v:IsA("BasePart") and field and isTokenInField(v, field) then
-							--			hasToken = true
-							--			break
-							--		end
-							--	end
-							--end
-
-							--if hasToken or not humanoid or not root then
-							--	break
-							--end
-							
-							if #queue["tokens"] > 0 then
-								break
-							end
-
-							if not humanoid or not root then
-								break
-							end
-
-							local flat = Vector3.new(targetPos.X, root.Position.Y, targetPos.Z)
-							if (flat - root.Position).Magnitude <= 1.5 then
-								break
-							end
-
-							if humanoid then
-								humanoid:MoveTo(flat)
-								task.wait()
+								if humanoid then
+									humanoid:MoveTo(flat)
+									task.wait()
+								end
 							end
 						end
 					end
 				end
-			end
-			
-			local info = mod.convert.get_pollen_info()
-			local threshold = actives["backpack"] or 80
-			local intervalMinutes = tonumber(actives["convert_interval"]) or 15
-			local interval = intervalMinutes * 60
 
-			local byBackpack = info and info.percent >= threshold and info.pollen > 0
-			local byTime = (tick() - lastConvertTime) >= interval
+				local info = mod.convert.get_pollen_info()
+				local threshold = actives["backpack"] or 80
+				local intervalMinutes = tonumber(actives["convert_interval"]) or 15
+				local interval = intervalMinutes * 60
 
-			if byBackpack or byTime then
-				local currentPos = select(1, farming.getHive())
-				if not currentPos then
+				local byBackpack = info and info.percent >= threshold and info.pollen > 0
+				local byTime = (tick() - lastConvertTime) >= interval
+
+				if byBackpack or byTime then
+					local currentPos = select(1, farming.getHive())
+					if not currentPos then
+						farmingActive = false
+						actives["move"] = false
+						mod.convert.autoHive()
+						return
+					end
+
+					lastConvertTime = tick()
 					farmingActive = false
 					actives["move"] = false
-					mod.convert.autoHive()
+					movement.move("hive", actives["walkspeed"], currentPos, function()
+						task.wait(1)
+						mod.convert.convert()
+					end)
 					return
 				end
 
-				lastConvertTime = tick()
-				farmingActive = false
-				actives["move"] = false
-				movement.move("hive", actives["walkspeed"], currentPos, function()
-					task.wait(1)
-					mod.convert.convert()
-				end)
-				return
+				task.wait()
 			end
-			
-			task.wait()
-		end
+		end)
 		
 		farmingActive = false
 		actives["move"] = false
+		if not ok then
+			warn("metod error:", err)
+		end
 	end
 
 	local function start(...)
@@ -1337,7 +1352,7 @@ function farming.farm(...)
 
 		local pos = randomTokens(a2[1])
 		table.insert(queue["auto_farm"], {targetPos = pos, speed = a2[2]})
-		if not actives["move"] then
+		if not farmingActive then
 			task.spawn(metod)
 		end
 	end
@@ -1354,7 +1369,7 @@ function farming.farm(...)
 			if not actives["auto_farm"] then
 				return
 			end
-			if not actives["move"] then
+			if not farmingActive then
 				task.spawn(metod)
 			end
 			
@@ -1374,7 +1389,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(24242424)
 
 task.spawn(function()
 	task.wait(2)
@@ -1407,6 +1422,7 @@ local function respawn(...)
 		farming.__pendingPuff = nil
 		farming.__puffOrigField = nil
 		farming.__puffStartTime = nil
+		farming.__puffWaiting = nil
 		farming.__puffId = (farming.__puffId or 0) + 1
 
 		farming.sproutActive = false
