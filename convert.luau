@@ -394,7 +394,7 @@ function convert.convert(...)
 	
 	local start = tick()
 	
-	while tick() - start < 3 do
+	while tick() - start < 6 do
 		if isMakingHoney() then
 			started = true
 			break
@@ -405,20 +405,20 @@ function convert.convert(...)
 	
 	if not started then
 		warn("make honey not started")
-		
+
 		actives["convert"] = false
 		actives["move"] = false
-		
+
 		task.defer(function()
-			task.wait(2)
-			
+			task.wait(7)
+
 			if actives["auto_farm"] then
 				if farming and farming.farm then
 					farming.farm()
 				end
 			end
 		end)
-		
+
 		return
 	end
 	
@@ -440,7 +440,7 @@ function convert.convert(...)
 				return
 			end
 			
-			if tick() - startTime > 600 then
+			if tick() - startTime > 300 then
 				if aconvert then
 					aconvert:Disconnect()
 					aconvert = nil
@@ -552,7 +552,7 @@ function convert.convert(...)
 
 					if balloon then
 						local popStart = tick()
-						local timeout = 600
+						local timeout = 300
 						while balloon.Parent and actives["auto_farm"] and (tick() - popStart) < timeout do
 							task.wait(.2)
 						end
