@@ -966,6 +966,8 @@ function farming.farm(...)
 			return
 		end
 		farmingActive = true
+		
+		local fieldChanged = false
 
 		local ok, err = pcall(function()
 			local character = find.player.Character
@@ -1125,9 +1127,15 @@ function farming.farm(...)
 				end
 
 				if actives["field"] ~= lastField then
+					local isRealChange = lastField ~= nil
 					lastField = actives["field"]
 					table.clear(queue["auto_farm"])
 					table.clear(queue["tokens"])
+
+					if isRealChange then
+						fieldChanged = true
+						break
+					end
 				end
 
 				if not field then
@@ -1360,6 +1368,15 @@ function farming.farm(...)
 		if not ok then
 			warn("metod error:", err)
 		end
+
+		if fieldChanged and actives["auto_farm"] then
+			task.spawn(function()
+				task.wait()
+				if actives["auto_farm"] and not farmingActive then
+					farming.farm()
+				end
+			end)
+		end
 	end
 
 	local function start(...)
@@ -1407,7 +1424,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
