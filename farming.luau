@@ -465,7 +465,7 @@ function farming.sprout(...)
 	end
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
-		task.wait(2)
+		task.wait(.4)
 		
 		if movement.stop then
 			pcall(movement.stop)
@@ -682,7 +682,7 @@ function farming.puffsrooms(...)
 	table.clear(queue["tokens"])
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
-		task.wait(2)
+		task.wait(.4)
 		
 		if movement.stop then
 			pcall(movement.stop)
@@ -764,28 +764,47 @@ function farming.puffsrooms(...)
 		local collectEnd = tick() + 3
 		local cTarget, cNext = nil, 0
 		
+		local dropPos = position
+		local collectEnd = tick() + 5
+		local cTarget = nil
+
 		while tick() < collectEnd and actives["auto_farm"] == true and puffId == farming.__puffId do
 			if not root or not root.Parent then
 				break
 			end
 			
-			local center = Vector3.new(dropPos.X, root.Position.Y, dropPos.Z)
-			local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5)
-			
-			if stale then
-				local ang = find.random:NextNumber(0, math.pi * 2)
-				local r   = 3 + 8 * find.random:NextNumber()
-				cTarget = Vector3.new(
-					center.X + math.cos(ang) * r,
-					root.Position.Y,
-					center.Z + math.sin(ang) * r
-				)
-				cNext = tick() + 0.4
+			local collectibles = workspace:FindFirstChild("Collectibles")
+			local best, bestDist = nil, nil
+			if collectibles then
+				for _, v in ipairs(collectibles:GetChildren()) do
+					if v:IsA("BasePart") and v.Transparency <= 0
+						and (v.Position - dropPos).Magnitude <= 35 then
+						local pd = (v.Position - root.Position).Magnitude
+						if not bestDist or pd < bestDist then
+							best, bestDist = v, pd
+						end
+					end
+				end
 			end
-			
-			--humanoid.WalkSpeed = speed
-			pcall(function() humanoid:MoveTo(cTarget) end)
-			task.wait(0.05)
+
+			if best then
+				local tp = Vector3.new(best.Position.X, root.Position.Y, best.Position.Z)
+				pcall(function() humanoid:MoveTo(tp) end)
+			else
+				local stale = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5)
+				if stale then
+					local ang = find.random:NextNumber(0, math.pi * 2)
+					local r   = 3 + 8 * find.random:NextNumber()
+					cTarget = Vector3.new(
+						dropPos.X + math.cos(ang) * r,
+						root.Position.Y,
+						dropPos.Z + math.sin(ang) * r
+					)
+				end
+				pcall(function() humanoid:MoveTo(cTarget) end)
+			end
+
+			task.wait(0.08)
 		end
 
 		if actives["auto_farm"] ~= true or not actives["puffshrooms"] then
@@ -1389,7 +1408,7 @@ function farming.farm(...)
 	end
 end
 
-print(44444444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
