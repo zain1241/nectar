@@ -771,38 +771,41 @@ function farming.puffsrooms(...)
 
 			local center = Vector3.new(dropPos.X, root.Position.Y, dropPos.Z)
 			local stale = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5)
-			
-			local collectibles = workspace:FindFirstChild("Collectibles")
-			local token = nil
-			if collectibles then
-				local bestDist = nil
-				for _, v in ipairs(collectibles:GetChildren()) do
-					if v:IsA("BasePart") and v.Transparency <= 0
-						and (v.Position - center).Magnitude <= 40 then
-						local d = (v.Position - root.Position).Magnitude
-						if not bestDist or d < bestDist then
-							token, bestDist = v, d
+
+			if stale then
+				local collectibles = workspace:FindFirstChild("Collectibles")
+				local token = nil
+				if collectibles then
+					local bestDist = nil
+					for _, v in ipairs(collectibles:GetChildren()) do
+						if v:IsA("BasePart") and v.Transparency <= 0
+							and (v.Position - center).Magnitude <= 40 then
+							local d = (v.Position - root.Position).Magnitude
+							if not bestDist or d < bestDist then
+								token, bestDist = v, d
+							end
 						end
 					end
 				end
-			end
 
-			if token then
-				cTarget = Vector3.new(token.Position.X, root.Position.Y, token.Position.Z)
-			elseif stale then
-				local ang = find.random:NextNumber(0, math.pi * 2)
-				local t   = find.random:NextNumber() ^ 0.6
-				local r   = 3 + (15 - 3) * t
-				cTarget = Vector3.new(
-					center.X + math.cos(ang) * r,
-					root.Position.Y,
-					center.Z + math.sin(ang) * r
-				)
+				if token then
+					cTarget = Vector3.new(token.Position.X, root.Position.Y, token.Position.Z)
+				else
+					local ang = find.random:NextNumber(0, math.pi * 2)
+					local t = find.random:NextNumber() ^ 0.6
+					local r = 3 + (15 - 3) * t
+					cTarget = Vector3.new(
+						center.X + math.cos(ang) * r,
+						root.Position.Y,
+						center.Z + math.sin(ang) * r
+					)
+				end
 			end
 
 			pcall(function() humanoid:MoveTo(cTarget) end)
 			task.wait(0.05)
 		end
+		
 		if actives["auto_farm"] ~= true or not actives["puffshrooms"] then
 			if puffId == farming.__puffId then
 				farming.puffActive = false
@@ -1404,7 +1407,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
