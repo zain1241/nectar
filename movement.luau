@@ -20,6 +20,7 @@ local find = {
 }
 
 local movement = {}
+local savedCollide = {}
 local move, noCollision
 local noclipEnabled = false
 
@@ -101,13 +102,25 @@ function movement.noClip(...)
 			if not part:IsA("BasePart") then
 				continue
 			end
-			
+
 			if part:FindFirstAncestorOfClass("Accessory")
 				or part:FindFirstAncestorOfClass("Tool") then
 				continue
 			end
 
-			part.CanCollide = not enabled
+			if enabled then
+				if savedCollide[part] == nil then
+					savedCollide[part] = part.CanCollide
+				end
+				part.CanCollide = false
+			else
+				local orig = savedCollide[part]
+				if orig == nil then
+					part.CanCollide = (part.Name == "HumanoidRootPart")
+				else
+					part.CanCollide = orig
+				end
+			end
 		end
 	end
 
@@ -115,6 +128,8 @@ function movement.noClip(...)
 
 	if enabled then
 		noCollision = find.prerender:Connect(update)
+	else
+		table.clear(savedCollide)
 	end
 end
 
