@@ -196,7 +196,7 @@ data.actives = {
 	last_time_convert = 0,
 	
 	--other settings
-	script_name = "Nectar 0006",
+	script_name = "Nectar 0007",
 	position_script = UDim2.new(0.22, 0, 0.5, 0),
 }
 
