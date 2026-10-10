@@ -378,10 +378,16 @@ function convert.convert(...)
 	local ok, err = pcall(function()
 		hiveCommand:FireServer("ToggleHoneyMaking")
 	end)
-	
+
 	if not ok then
 		actives["convert"] = false
 		actives["move"] = false
+		task.defer(function()
+			task.wait(2)
+			if actives["auto_farm"] and farming and farming.farm then
+				farming.farm()
+			end
+		end)
 		return
 	end
 	
