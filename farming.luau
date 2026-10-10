@@ -627,7 +627,7 @@ function farming.puffsrooms(...)
 			if not shroom then
 				task.spawn(function()
 					local waitStart = tick()
-					local maxWait = tonumber(actives["puff_wait_time"]) or 60
+					local maxWait = tonumber(actives["puff_wait_time"]) or 10
 					while tick() - waitStart < maxWait do
 						if actives["auto_farm"] ~= true then return end
 						task.wait(1)
@@ -741,10 +741,10 @@ function farming.puffsrooms(...)
 			if not spoutPos then
 				break
 			end
-			
+
 			local center = Vector3.new(spoutPos.X, root.Position.Y, spoutPos.Z)
-			local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5 and tick() >= nextPickAt)
-			
+			local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5)
+
 			if stale then
 				local ang = find.random:NextNumber(0, math.pi * 2)
 				local t   = find.random:NextNumber() ^ 0.6
@@ -754,12 +754,10 @@ function farming.puffsrooms(...)
 					root.Position.Y,
 					center.Z + math.sin(ang) * r
 				)
-				nextPickAt = tick() + 0.5
 			end
-			
-			--humanoid.WalkSpeed = speed
+
 			pcall(function() humanoid:MoveTo(target) end)
-			task.wait(0.08)
+			task.wait(0.05)
 		end
 		
 		local dropPos = position
@@ -772,7 +770,7 @@ function farming.puffsrooms(...)
 			end
 			
 			local center = Vector3.new(dropPos.X, root.Position.Y, dropPos.Z)
-			local stale = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5 and tick() >= cNext)
+			local stale = (not target) or ((Vector3.new(target.X, root.Position.Y, target.Z) - root.Position).Magnitude < 1.5)
 			
 			if stale then
 				local ang = find.random:NextNumber(0, math.pi * 2)
@@ -787,7 +785,7 @@ function farming.puffsrooms(...)
 			
 			--humanoid.WalkSpeed = speed
 			pcall(function() humanoid:MoveTo(cTarget) end)
-			task.wait(0.08)
+			task.wait(0.05)
 		end
 
 		if actives["auto_farm"] ~= true or not actives["puffshrooms"] then
@@ -813,7 +811,7 @@ function farming.puffsrooms(...)
 		end
 		
 		local waitStart = tick()
-		local maxWait   = tonumber(actives["puff_wait_time"]) or 60
+		local maxWait   = tonumber(actives["puff_wait_time"]) or 10
 		local foundNew  = false
 
 		while tick() - waitStart < maxWait do
@@ -1326,7 +1324,9 @@ function farming.farm(...)
 					lastConvertTime = tick()
 					farmingActive = false
 					actives["move"] = false
+					farming.__goingToHive = true
 					movement.move("hive", actives["walkspeed"], currentPos, function()
+						farming.__goingToHive = false
 						task.wait(1)
 						mod.convert.convert()
 					end)
@@ -1364,7 +1364,7 @@ function farming.farm(...)
 		return
 	end
 	
-	if hivePos ~= nil then
+	if hivePos ~= nil and not farming.__goingToHive then
 		mod.movement.move("go_to_field", walkspeed, field, function()
 			if not actives["auto_farm"] then
 				return
@@ -1389,7 +1389,7 @@ function farming.farm(...)
 	end
 end
 
-print(24242424)
+print(44444444)
 
 task.spawn(function()
 	task.wait(2)
@@ -1424,6 +1424,7 @@ local function respawn(...)
 		farming.__puffStartTime = nil
 		farming.__puffWaiting = nil
 		farming.__puffId = (farming.__puffId or 0) + 1
+		farming.__goingToHive = nil
 
 		farming.sproutActive = false
 		farming.__pendingSprout = nil
