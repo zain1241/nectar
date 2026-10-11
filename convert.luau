@@ -34,7 +34,12 @@ end
 
 local function hasPendingSpecial()
 	local farmModule = getFarmingModule()
-	return farmModule ~= nil and (farmModule.__pendingSprout ~= nil or farmModule.__pendingPuff ~= nil)
+	if not farmModule then return false end
+	local sproutBlocking = actives["sprout"] == true
+		and (farmModule.__pendingSprout ~= nil or farmModule.sproutActive == true)
+	local puffBlocking = actives["puffshrooms"] == true
+		and (farmModule.__pendingPuff ~= nil or farmModule.puffActive == true)
+	return sproutBlocking or puffBlocking
 end
 
 function convert.conAF(...)
@@ -417,6 +422,31 @@ function convert.convert(...)
 						end
 					end
 				end)
+				
+				-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
+				-- "висит" на улье (pollen=0, но идёт движение к полю), принудительно запускаем farm().
+				task.delay(8, function()
+					if convert.__jobId ~= jobId then return end
+					if actives["auto_farm"] ~= true then return end
+
+					local fm = getFarmingModule()
+					if not fm then return end
+
+					-- Если pollen снова набрался — значит уже фармим, всё ок.
+					local info = convert.get_pollen_info()
+					if info and info.pollen > 0 then return end
+
+					-- Застряли: __goingToHive или __fieldRouteInProgress держатся дольше 8 сек
+					if fm.__goingToHive or fm.__fieldRouteInProgress then
+						warn("[convert] safety net: bot stuck after conversion, forcing farm()")
+						fm.__goingToHive = false
+						fm.__fieldRouteInProgress = false
+						fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
+						if type(fm.farm) == "function" then
+							fm.farm()
+						end
+					end
+				end)
 			end
 			return
 		end
@@ -593,7 +623,7 @@ function convert.convert(...)
 
 	return true
 end
-print(123123)
+print(1111)
 
 function convert.equip_mask(name)
 	--print(2)
