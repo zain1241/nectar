@@ -41,7 +41,7 @@ local function resetCharacterState()
 	if not humanoid then
 		return
 	end
-	
+
 	humanoid.PlatformStand = false
 	pcall(function()
 		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -143,16 +143,16 @@ local function getStats(...)
 	if not humanoid then
 		return
 	end
-	
+
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	if not events then
 		return nil
 	end
-	
+
 	local ok, result = pcall(function()
 		return events:WaitForChild("RetrievePlayerStats"):InvokeServer()
 	end)
-	
+
 	if ok and type(result) == "table" then
 		return result
 	end
@@ -181,7 +181,7 @@ function farming.sprinkler(...)
 	if not command then
 		return false
 	end
-	
+
 	local now = tick()
 	if now - (farming.__lastSprinklerAt or 0) < 4 then
 		return
@@ -241,23 +241,23 @@ end
 
 function farming.dig(...)
 	local a = {...}
-	
+
 	if a[1] ~= true then
 		return
 	end
-	
+
 	if dig then
 		dig:Disconnect()
 		dig = nil
 	end
-	
+
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local collect = events and events:FindFirstChild("ToolCollect")
 	if not collect or not collect:IsA("RemoteEvent") then
 		warn("tool is not find")
 		return
 	end
-	
+
 	dig = farming.conAF(
 		find.prerender, 2,
 		function(delta)
@@ -278,7 +278,7 @@ function farming.lockWalkSpeed()
 		walkSpeedLock:Disconnect()
 		walkSpeedLock = nil
 	end
-	
+
 	walkSpeedLock = farming.conAF(
 		find.prerender, 2,
 		function(delta)
@@ -291,7 +291,7 @@ function farming.lockWalkSpeed()
 				if type(want) ~= "number" then
 					want = 16
 				end
-				
+
 				local slider = actives["massles_slider"]
 				if actives["massles"] then
 					local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -1499,15 +1499,42 @@ function farming.farm(...)
 		return
 	end
 	
+	if not actives["sprout"]
+		and (farming.__pendingSprout or farming.sproutActive or farming.__sproutOrigField) then
+		farming.sproutActive = false
+		farming.__sproutId = (farming.__sproutId or 0) + 1
+		farming.__pendingSprout = nil
+		farming.__sproutStartTime = nil
+		farming.__sproutPosition = nil
+		if farming.__sproutOrigField then
+			actives["field"] = farming.__sproutOrigField
+			farming.__sproutOrigField = nil
+		end
+	end
+
+	if not actives["puffshrooms"]
+		and (farming.__pendingPuff or farming.puffActive or farming.__puffOrigField or farming.__puffWaiting) then
+		farming.puffActive = false
+		farming.__puffId = (farming.__puffId or 0) + 1
+		farming.__pendingPuff = nil
+		farming.__puffStartTime = nil
+		farming.__puffPosition = nil
+		farming.__puffWaiting = nil
+		if farming.__puffOrigField then
+			actives["field"] = farming.__puffOrigField
+			farming.__puffOrigField = nil
+		end
+	end
+
 	actives.move = false
-	
+
 	lastConvertTime = lastConvertTime or tick()
 	--if not status then
 	--	return farming.noClip(status)
 	--end --return if not active
-	
+
 	--farming.noClip(status)
-	
+
 	local hivePos, hiveId = farming.getHive()
 	--print(hivePos, hiveId, "423")
 	if hivePos == nil and hiveId == nil then
@@ -1517,13 +1544,13 @@ function farming.farm(...)
 		table.clear(queue["tokens"])
 		return
 	end
-	
+
 	local field = actives["field"]
 	local fields = workspace:FindFirstChild("FlowerZones")
 	if not fields then
 		return warn("not found")
 	end
-	
+
 	local function randomTokens(...)
 		local a = {...}
 		local part = a[1]
@@ -1573,7 +1600,7 @@ function farming.farm(...)
 			return
 		end
 		farmingActive = true
-		
+
 		local fieldChanged = false
 
 		local ok, err = pcall(function()
@@ -1583,9 +1610,9 @@ function farming.farm(...)
 			if not humanoid or not root then
 				return
 			end
-			
+
 			actives["move"] = true
-			
+
 			local function isTokenInField(token, field)
 				local p = field.CFrame:PointToObjectSpace(token.Position)
 				local s = field.Size / 2
@@ -1596,17 +1623,6 @@ function farming.farm(...)
 				local n = part.Name
 				return n == "Bubble" or n == "GoldBubble"
 			end
-
-			--local function getPriority(obj)
-			--	if isBubble(obj) then
-			--		return (tonumber(actives["bubble_priority"]) or 0) * 0.2
-			--	end
-
-			--	local tp = actives["token_priorities"] or {}
-			--	local dp = actives["drops_priorities"] or {}
-
-			--	return tonumber(tp[obj.Name]) or tonumber(dp[obj.Name]) or 0
-			--end
 
 			local function getPriority(obj)
 				local tp = actives["token_priorities"] or {}
@@ -1666,7 +1682,8 @@ function farming.farm(...)
 					stuckTicks = 0
 				end
 				lastRootPos = root.Position
-				
+
+				-- [FIX 1] Backpack-threshold hive trip: quickHive вместо currentPos + moveWithTimeout
 				local quickInfo = mod.convert.get_pollen_info()
 				local quickThr = tonumber(actives["backpack"]) or 80
 				if quickInfo and quickInfo.percent >= quickThr and quickInfo.pollen > 0 then
@@ -1685,7 +1702,6 @@ function farming.farm(...)
 						farming.__hiveTripId = (farming.__hiveTripId or 0) + 1
 						local hiveTripId = farming.__hiveTripId
 
-						-- A failed movement callback must not leave __goingToHive=true forever.
 						moveWithTimeout("hive", actives["walkspeed"], quickHive, function()
 							task.wait(1)
 							if hiveTripId ~= farming.__hiveTripId or actives["auto_farm"] ~= true then
@@ -1695,14 +1711,15 @@ function farming.farm(...)
 							mod.convert.convert()
 						end, 60, function(reason)
 							if hiveTripId ~= farming.__hiveTripId then return end
-							warn("[farming] movement to hive timed out; restarting AutoFarm:", reason)
+							warn("[farming] backpack-threshold hive trip timed out:", reason)
 							farming.__goingToHive = false
 							actives["move"] = false
 							farmingActive = false
 							task.delay(1, function()
-								if actives["auto_farm"] == true and not farming.__goingToHive
+								if actives["auto_farm"] == true
+									and not farming.__goingToHive
 									and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
-									if type(farming.farm) == "function" then farming.farm() end
+									farming.farm()
 								end
 							end)
 						end, function()
@@ -1711,11 +1728,11 @@ function farming.farm(...)
 						return
 					end
 				end
-				
+
 				if actives["move"] and not farming.__goingToHive then
 					local currentState = humanoid:GetState()
 					local onGround = (currentState == Enum.HumanoidStateType.Running  or currentState == Enum.HumanoidStateType.RunningNoPhysics or currentState == Enum.HumanoidStateType.Landed)
-					
+
 					if onGround then
 						farming.__groundTicks = (farming.__groundTicks or 0) + 1
 						if farming.__groundTicks > 300 then
@@ -1747,14 +1764,6 @@ function farming.farm(...)
 						humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 					end)
 				end
-
-				--if actives["sprout"] and not farming.sproutActive then
-				--	farming.sprout(true)
-				--end
-
-				--if movement.stop then
-				--	pcall(movement.stop)
-				--end
 
 				if actives["puffshrooms"] and not farming.puffActive then
 					local ok, err = pcall(farming.puffsrooms, true)
@@ -1872,37 +1881,14 @@ function farming.farm(...)
 					end
 				end
 
-				--if collectibles and field then
-				--	if root then
-				--		for _, v in pairs(collectibles:GetChildren()) do
-				--			if v:IsA("BasePart") and field and v.Transparency <= 0 and isTokenInField(v, field) and (root.Position - v.Position).Magnitude > 2 then
-				--				table.insert(queue["tokens"], v)
-				--			end
-				--		end
-				--	end
-				--end
-
 				if #queue["tokens"] > 0 then
 					if not root then
 						actives["move"] = false
 						return
 					end
 
-					--local position = root.Position
-					--local speed = removeTable.speed or actives["walkspeed"]
-					--table.sort(queue["tokens"], function(x, y)
-					--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
-					--end)
-
 					local position = root.Position
 					local speed = removeTable.speed or actives["walkspeed"]
-					--table.sort(queue["tokens"], function(x, y)
-					--	local px, py = getPriority(x), getPriority(y)
-					--	if px ~= py then
-					--		return px > py
-					--	end
-					--	return (position - x.Position).Magnitude < (position - y.Position).Magnitude
-					--end)
 					table.sort(queue["tokens"], function(x, y)
 						local px = getPriority(x)
 						local py = getPriority(y)
@@ -1935,24 +1921,6 @@ function farming.farm(...)
 							break
 						end
 
-						--local targetIsBubble = isBubble(target)
-						--local targetDistance = (position - target.Position).Magnitude
-
-						--if targetIsBubble and targetDistance > 25 then
-						--	for i = 2, #queue["tokens"] do
-						--		local candidate = queue["tokens"][i]
-
-						--		if not isBubble(candidate) then
-						--			local distance = (position - candidate.Position).Magnitude
-
-						--			if distance <= 25 then
-						--				target = candidate
-						--				break
-						--			end
-						--		end
-						--	end
-						--end
-
 						local tp = Vector3.new(target.Position.X, root.Position.Y, target.Position.Z)
 						local dist = (tp - root.Position).Magnitude
 
@@ -1974,20 +1942,6 @@ function farming.farm(...)
 								if not actives["auto_farm"] then
 									break
 								end
-
-								--local hasToken = false
-								--if collectibles and field then
-								--	for _, v in pairs(collectibles:GetChildren()) do
-								--		if v:IsA("BasePart") and field and isTokenInField(v, field) then
-								--			hasToken = true
-								--			break
-								--		end
-								--	end
-								--end
-
-								--if hasToken or not humanoid or not root then
-								--	break
-								--end
 
 								if #queue["tokens"] > 0 then
 									break
@@ -2034,13 +1988,36 @@ function farming.farm(...)
 						return
 					end
 
+					-- [FIX 2] Interval hive trip: moveWithTimeout вместо сырого movement.move
 					lastConvertTime = tick()
 					farmingActive = false
 					actives["move"] = false
 					farming.__goingToHive = true
-					movement.move("hive", actives["walkspeed"], currentPos, function()
+					farming.__hiveTripId = (farming.__hiveTripId or 0) + 1
+					local hiveTripId = farming.__hiveTripId
+
+					moveWithTimeout("hive", actives["walkspeed"], currentPos, function()
 						task.wait(1)
+						if hiveTripId ~= farming.__hiveTripId or actives["auto_farm"] ~= true then
+							farming.__goingToHive = false
+							return
+						end
 						mod.convert.convert()
+					end, 60, function(reason)
+						if hiveTripId ~= farming.__hiveTripId then return end
+						warn("[farming] interval hive trip timed out:", reason)
+						farming.__goingToHive = false
+						actives["move"] = false
+						farmingActive = false
+						task.delay(1, function()
+							if actives["auto_farm"] == true
+								and not farming.__goingToHive
+								and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
+								farming.farm()
+							end
+						end)
+					end, function()
+						return hiveTripId == farming.__hiveTripId and actives["auto_farm"] == true
 					end)
 					return
 				end
@@ -2048,7 +2025,7 @@ function farming.farm(...)
 				task.wait()
 			end
 		end)
-		
+
 		farmingActive = false
 		actives["move"] = false
 		if not ok then
@@ -2077,17 +2054,18 @@ function farming.farm(...)
 			task.spawn(metod)
 		end
 	end
-	
+
 	if farming.__pendingSprout and farming.__pendingSprout.Parent then
 		if not farmingActive then
 			task.spawn(metod)
 		end
 		return
 	end
-	
-	if hivePos ~= nil and not farming.__goingToHive then
+
+	if hivePos ~= nil or hiveId ~= nil then
 		if not field then
-			warn("[farming] cannot return to field: selected field was not found:", tostring(actives["field"]))
+			warn("[farming] cannot return to field: selected field was not found:",
+				tostring(actives["field"]))
 			return
 		end
 		if farming.__fieldRouteInProgress then
@@ -2138,7 +2116,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
@@ -2146,11 +2124,11 @@ task.spawn(function()
 	if actives["auto_farm"] then
 		farming.farm()
 	end
-	
+
 	if actives["dig"] then
 		farming.dig(true)
 	end
-	
+
 end)
 
 local function respawn(...)
@@ -2158,15 +2136,15 @@ local function respawn(...)
 	local a = {...}
 	if a[1] then
 		task.wait(1)
-		
+
 		if movement.stop then
 			movement.stop()
 		end
-		
+
 		farmingActive = false
 		actives["move"] = false
 		lastConvertTime = tick()
-		
+
 		farming.puffActive = false
 		farming.__pendingPuff = nil
 		farming.__puffOrigField = nil
@@ -2181,11 +2159,11 @@ local function respawn(...)
 		farming.__groundTicks = 0
 		farming.__watchdogPos = nil
 		farming.__watchdogStuck = 0
-		
+
 		if mod.convert then
 			mod.convert.__failedAt = nil
 		end
-		
+
 		farming.sproutActive = false
 		farming.__pendingSprout = nil
 		farming.__sproutOrigField = nil
@@ -2194,11 +2172,11 @@ local function respawn(...)
 
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
-		
+
 		if actives["auto_farm"] then
 			farming.farm()
 		end
-		
+
 		if actives["dig"] then
 			farming.dig(true)
 		end
