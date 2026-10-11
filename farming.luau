@@ -431,19 +431,21 @@ function farming.sprout(...)
 
 		actives["move"] = true
 
-		local stop = tick() + 20
-		while tick() < stop and sproutId == farming.__sproutId and actives["auto_farm"] == true do
-			task.wait(.2)
-		end
-		
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
 
-		if sproutId == farming.__sproutId and actives["auto_farm"] == true and farming.__sproutOrigField then
-			actives["field"] = farming.__sproutOrigField
+		if sproutId == farming.__sproutId and actives["auto_farm"] == true then
+			if farming.__sproutOrigField then
+				actives["field"] = farming.__sproutOrigField
+			else
+				local zones = workspace:FindFirstChild("FlowerZones")
+				if zones and #zones:GetChildren() > 0 then
+					actives["field"] = zones:GetChildren()[1].Name
+				end
+			end
 			farming.__sproutOrigField = nil
 		end
-		
+
 		local targetField = actives["field"]
 		if targetField and targetField ~= sField then
 			mod.movement.move("go_to_field", actives["walkspeed"], targetField, function()
@@ -453,14 +455,10 @@ function farming.sprout(...)
 				if actives["sprinkler"] then
 					farming.sprinkler(true)
 				end
-				if sproutId == farming.__sproutId then
-					farming.sproutActive = false
-				end
+				farming.sproutActive = false
 			end)
 		else
-			if sproutId == farming.__sproutId then
-				farming.sproutActive = false
-			end
+			farming.sproutActive = false
 		end
 	end
 	
@@ -488,6 +486,8 @@ function farming.sprout(...)
 			if hivePos then
 				farming.__pendingSprout = sprout
 				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
+					farmingActive = false
+					actives["move"] = false
 					mod.convert.convert()
 					local wStart = tick()
 					while tick() - wStart < 45 do
@@ -636,6 +636,9 @@ function farming.puffsrooms(...)
 							return
 						end
 					end
+
+					farming.puffActive = false
+
 					local returnField = farming.__puffOrigField or actives["field"]
 					farming.__puffOrigField = nil
 					if returnField then
@@ -660,6 +663,7 @@ function farming.puffsrooms(...)
 	end
 	
 	if not shroom then
+		farming.puffActive = false
 		return
 	end
 	
@@ -705,6 +709,8 @@ function farming.puffsrooms(...)
 			if hivePos then
 				farming.__pendingPuff = shroom
 				mod.movement.move("hive", actives["walkspeed"], hivePos, function()
+					farmingActive = false
+					actives["move"] = false
 					mod.convert.convert()
 					local wStart = tick()
 					while tick() - wStart < 45 do
@@ -1424,7 +1430,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(111111)
 
 task.spawn(function()
 	task.wait(2)
