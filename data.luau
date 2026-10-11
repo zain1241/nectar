@@ -156,6 +156,7 @@ for _, v in ipairs(data.drops_priorities) do
 end
 
 data.actives = {
+	--farming
 	--unit
 	auto_farm = false,
 	sprinkler = false,
@@ -185,6 +186,14 @@ data.actives = {
 	mask = "None",
 	convert_interval = 15,
 	
+	
+	
+	--toys
+	wealth = false,
+	boosters = false,
+	
+	
+	
 	--settings global
 	anti_afk = true,
 	walkspeed = 80,
@@ -196,7 +205,7 @@ data.actives = {
 	last_time_convert = 0,
 	
 	--other settings
-	script_name = "Nectar 0007",
+	script_name = "Nectar 0008",
 	position_script = UDim2.new(0.22, 0, 0.5, 0),
 }
 
