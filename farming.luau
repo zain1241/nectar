@@ -1453,6 +1453,13 @@ function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
 	
+	if farming.__goingToHive
+		and actives["convert"] ~= true
+		and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
+		warn("[farming] stale __goingToHive detected, resetting to false")
+		farming.__goingToHive = false
+	end
+	
 	warn("[farm-call] goingToHive=", farming.__goingToHive,
 		"convert=", actives["convert"],
 		"running=", mod.convert and mod.convert.__running,
@@ -2139,7 +2146,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
@@ -2220,6 +2227,14 @@ farming.resetCharacterState = resetCharacterState
 task.spawn(function()
 	while true do
 		task.wait(5)
+		local staleHiveLock = farming.__goingToHive == true
+			and actives["convert"] ~= true
+			and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled))
+
+		if staleHiveLock then
+			farming.__goingToHive = false
+			warn("[farming] watchdog: stale __goingToHive cleared")
+		end
 
 		local should_check = actives["auto_farm"] == true
 			and not farmingActive
