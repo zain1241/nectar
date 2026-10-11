@@ -574,6 +574,11 @@ function convert.convert(...)
 					if farming and farming.farm then
 						local mask = actives["mask"]
 						convert.equip_mask(mask)
+						farming.sproutActive = false
+						farming.puffActive = false
+						if farming.resetCharacterState then
+							farming.resetCharacterState()
+						end
 						farming.farm()
 					end
 				end
@@ -582,7 +587,7 @@ function convert.convert(...)
 	)
 end
 
-print(111111)
+print(123123)
 
 function convert.equip_mask(name)
 	--print(2)
