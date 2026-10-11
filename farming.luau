@@ -1679,9 +1679,31 @@ function farming.farm(...)
 						farmingActive = false
 						actives["move"] = false
 						farming.__goingToHive = true
-						movement.move("hive", actives["walkspeed"], quickHive, function()
+						farming.__hiveTripId = (farming.__hiveTripId or 0) + 1
+						local hiveTripId = farming.__hiveTripId
+
+						-- A failed movement callback must not leave __goingToHive=true forever.
+						moveWithTimeout("hive", actives["walkspeed"], quickHive, function()
 							task.wait(1)
+							if hiveTripId ~= farming.__hiveTripId or actives["auto_farm"] ~= true then
+								farming.__goingToHive = false
+								return
+							end
 							mod.convert.convert()
+						end, 60, function(reason)
+							if hiveTripId ~= farming.__hiveTripId then return end
+							warn("[farming] movement to hive timed out; restarting AutoFarm:", reason)
+							farming.__goingToHive = false
+							actives["move"] = false
+							farmingActive = false
+							task.delay(1, function()
+								if actives["auto_farm"] == true and not farming.__goingToHive
+									and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
+									if type(farming.farm) == "function" then farming.farm() end
+								end
+							end)
+						end, function()
+							return hiveTripId == farming.__hiveTripId and actives["auto_farm"] == true
 						end)
 						return
 					end
