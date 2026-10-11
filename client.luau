@@ -4,10 +4,10 @@
 local env = (getgenv and getgenv()) or _G
 
 local loaded = rawget(env, "__NECTAR_MODULES")
-local data, farming, menu, convert, movement, utils
+local data, farming, menu, convert, movement, utils, toys
 
-if loaded and loaded.data and loaded.farming and loaded.menu and loaded.convert and loaded.movement and loaded.utils then
-	data, farming, menu, convert, movement, utils = loaded.data, loaded.farming, loaded.menu, loaded.convert, loaded.movement, loaded.utils
+if loaded and loaded.data and loaded.farming and loaded.menu and loaded.convert and loaded.movement and loaded.utils and loaded.toys then
+	data, farming, menu, convert, movement, utils, toys = loaded.data, loaded.farming, loaded.menu, loaded.convert, loaded.movement, loaded.utils, loaded.toys
 else
 	data = require(script:WaitForChild("data"))
 	farming = require(script:WaitForChild("farming"))
@@ -15,6 +15,7 @@ else
 	convert = require(script:WaitForChild("convert"))
 	movement = require(script:WaitForChild("movement"))
 	utils = require(script:WaitForChild("utils"))
+	toys = require(script:WaitForChild("toys"))
 end
 
 assert(type(data) == "table" and type(data.actives) == "table", "client: data not loaded")
@@ -23,6 +24,7 @@ assert(type(menu) == "table" and type(menu.client_menu) == "function", "client: 
 assert(type(convert) == "table", "client: convert not loaded")
 assert(type(movement) == "table", "client: movement not loaded")
 assert(type(utils) == "table", "client: utils not loaded")
+assert(type(toys) == "table", "client: toys not loaded")
 
 -- Cached services
 local RunService = game:GetService("RunService")
@@ -92,6 +94,7 @@ local mod = {
 	convert = convert,
 	movement = movement,
 	utils = utils,
+	toys = toys,
 	save = saveConfig,
 }
 
