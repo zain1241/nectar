@@ -26,6 +26,17 @@ local find = {
 local convert = {}
 local noCollision, aconvert
 
+local function getFarmingModule()
+	if farming then return farming end
+	local modules = rawget(env, "__NECTAR_MODULES")
+	return modules and modules.farming or nil
+end
+
+local function hasPendingSpecial()
+	local farmModule = getFarmingModule()
+	return farmModule ~= nil and (farmModule.__pendingSprout ~= nil or farmModule.__pendingPuff ~= nil)
+end
+
 function convert.conAF(...)
 	local a = {...}
 	local interval = 1 / a[2]
@@ -197,7 +208,7 @@ function convert.autoHive(...)
 
 	convert.noClip(false)
 	convert.control(false)
-	
+
 	local hivePos, hiveID = convert.getHive()
 	if hivePos then
 		--print(1)
@@ -207,7 +218,7 @@ function convert.autoHive(...)
 		end, hiveID)
 		return
 	end
-	
+
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local claimHive = events and events:FindFirstChild("ClaimHive")
 
@@ -251,7 +262,7 @@ function convert.autoHive(...)
 		warn("claimHive failed:", err)
 		return
 	end
-	
+
 	local newPos, newId
 	for _ = 1, 20 do
 		task.wait(0.25)
@@ -265,9 +276,9 @@ function convert.autoHive(...)
 		warn("not hive (id:", targetHiveId, ")")
 		return
 	end
-	
+
 	--print(newPos)
-	
+
 	if farming then farming.__goingToHive = true end
 	movement.move("hive", actives["walkspeed"], newPos, function()
 		if farming then farming.__goingToHive = false end
@@ -305,32 +316,32 @@ end
 
 function convert.convert(...)
 	local a = {...}
-	
+
 	actives["convert"] = true
-	
+
 	if actives["honey_mask"] then
 		convert.honey_mask()
 		task.wait(.5)
 	end
-	
+
 	local humanoid = find.player.Character:FindFirstChildOfClass("Humanoid")
 	local root = find.player.Character:FindFirstChild("HumanoidRootPart")
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local hiveCommand = events and events:FindFirstChild("PlayerHiveCommand")
-	
+
 	if not humanoid or not root then
 		actives["convert"] = false
 		actives["move"] = false
 		return
 	end
-	
+
 	if not hiveCommand or not hiveCommand:IsA("RemoteEvent") then
 		warn("playerHiveCommand not found")
 		actives["convert"] = false
 		actives["move"] = false
 		return
 	end
-	
+
 	local function isMakingHoney()
 		local button = mod.movement.findActivateButton()
 		if not button then
@@ -346,7 +357,7 @@ function convert.convert(...)
 
 		return false
 	end
-	
+
 	local function getPollen()
 		local coreStats = find.player:FindFirstChild("CoreStats")
 		local pollen = coreStats and coreStats:FindFirstChild("Pollen")
@@ -358,7 +369,7 @@ function convert.convert(...)
 		local info = convert.get_pollen_info()
 		return info and info.pollen
 	end
-	
+
 	local beforePollen = getPollen()
 	local started = isMakingHoney()
 
@@ -369,16 +380,15 @@ function convert.convert(...)
 			actives["last_time_convert"] = tick()
 			task.defer(function()
 				task.wait(1)
-				if actives["auto_farm"] then
-					if farming and farming.farm then
-						farming.farm()
-					end
+				if actives["auto_farm"] and not hasPendingSpecial() then
+					local farmModule = getFarmingModule()
+					if farmModule and farmModule.farm then farmModule.farm() end
 				end
 			end)
 			return
 		end
 	end
-	
+
 	local ok, err = pcall(function()
 		hiveCommand:FireServer("ToggleHoneyMaking")
 	end)
@@ -388,15 +398,16 @@ function convert.convert(...)
 		actives["move"] = false
 		task.defer(function()
 			task.wait(2)
-			if actives["auto_farm"] and farming and farming.farm then
-				farming.farm()
+			if actives["auto_farm"] and not hasPendingSpecial() then
+				local farmModule = getFarmingModule()
+				if farmModule and farmModule.farm then farmModule.farm() end
 			end
 		end)
 		return
 	end
 
 	local start = tick()
-	
+
 	while tick() - start < 6 do
 		if isMakingHoney() then
 			started = true
@@ -405,7 +416,7 @@ function convert.convert(...)
 
 		task.wait(.1)
 	end	
-	
+
 	--if not started then
 	--	warn("make honey not started")
 
@@ -424,10 +435,10 @@ function convert.convert(...)
 
 	--	return
 	--end
-	
+
 	local startTime = tick()
 	local pollenZeroSince = nil
-	
+
 	aconvert = convert.conAF(
 		find.prerender,
 		4,
@@ -437,35 +448,35 @@ function convert.convert(...)
 					aconvert:Disconnect()
 					aconvert = nil
 				end
-				
+
 				actives["convert"] = false
 				actives["move"] = false
 				return
 			end
-			
+
 			if tick() - startTime > 300 then
 				if aconvert then
 					aconvert:Disconnect()
 					aconvert = nil
 				end
-				
+
 				actives["last_time_convert"] = tick()
 				actives["convert"] = false
 				actives["move"] = false
-				
+				convert.__conversionFinishedAt = tick()
+
 				task.defer(function()
 					task.wait(2)
-					
-					if actives["auto_farm"] then
-						if farming and farming.farm then
-							farming.farm()
-						end
+
+					if actives["auto_farm"] and not hasPendingSpecial() then
+						local farmModule = getFarmingModule()
+						if farmModule and farmModule.farm then farmModule.farm() end
 					end
 				end)
-				
+
 				return
 			end
-			
+
 			local pollen = getPollen()
 
 			if pollen == nil then
@@ -491,7 +502,7 @@ function convert.convert(...)
 				aconvert:Disconnect()
 				aconvert = nil
 			end
-			
+
 			task.spawn(function()
 				local function markResult()
 					local afterPollen = getPollen()
@@ -514,7 +525,7 @@ function convert.convert(...)
 						local character = find.player.Character
 						local root = character and (character.PrimaryPart or character:FindFirstChild("HumanoidRootPart"))
 						if not root then return nil end
-						
+
 						local function getPart(inst)
 							local body = inst:FindFirstChild("BalloonBody")
 							if not body then return nil end
@@ -530,7 +541,7 @@ function convert.convert(...)
 
 							return nil
 						end
-						
+
 						local best, bestDist
 						for _, inst in ipairs(hiveBalloons:GetChildren()) do
 							if inst.Name == "HiveBalloonInstance" then
@@ -577,7 +588,7 @@ function convert.convert(...)
 						end
 					end
 				end
-				
+
 				markResult()
 
 				actives["last_time_convert"] = tick()
@@ -585,17 +596,25 @@ function convert.convert(...)
 				actives["move"] = false
 
 				if actives["auto_farm"] then
-					if farming and farming.farm then
+					local farmModule = getFarmingModule()
+					if farmModule and farmModule.farm then
 						local mask = actives["mask"]
 						convert.equip_mask(mask)
-						farming.sproutActive = false
-						farming.puffActive = false
-						if farming.resetCharacterState then
-							farming.resetCharacterState()
+						-- Resume the pending Sprout/Puffshroom from its own callback.
+						local pendingSpecial = hasPendingSpecial()
+						if not pendingSpecial then
+							farmModule.sproutActive = false
+							farmModule.puffActive = false
 						end
-						farming.farm()
+						if farmModule.resetCharacterState then
+							farmModule.resetCharacterState()
+						end
+						if not pendingSpecial then
+							farmModule.farm()
+						end
 					end
 				end
+				convert.__conversionFinishedAt = tick()
 			end)
 		end
 	)
@@ -605,7 +624,7 @@ print(4444)
 
 function convert.equip_mask(name)
 	--print(2)
-	
+
 	if type(name) ~= "string" or name == "" or name == "None" then
 		return false
 	end
@@ -619,7 +638,7 @@ function convert.equip_mask(name)
 	if not item then
 		return false
 	end
-	
+
 	item:InvokeServer("Equip", {Mute = false, Type = name, Category = "Accessory"})
 	--print(2)
 
