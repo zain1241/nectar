@@ -446,29 +446,19 @@ function farming.sprout(...)
 
 	local function finish()
 		local sField = getZone(position)
-		if sField then
-			actives["field"] = sField
-		end
+		local targetField = farming.__sproutOrigField
+		farming.__sproutOrigField = nil
 
-		actives["move"] = true
-
-		table.clear(queue["auto_farm"])
-		table.clear(queue["tokens"])
-
-		if sproutId == farming.__sproutId and actives["auto_farm"] == true then
-			if farming.__sproutOrigField then
-				actives["field"] = farming.__sproutOrigField
-			else
-				local zones = workspace:FindFirstChild("FlowerZones")
-				if zones and #zones:GetChildren() > 0 then
-					actives["field"] = zones:GetChildren()[1].Name
-				end
+		if not targetField or targetField == sField then
+			local zones = workspace:FindFirstChild("FlowerZones")
+			if sField and (actives["field"] == sField) then
+			elseif not targetField and zones and #zones:GetChildren() > 0 then
+				targetField = actives["field"] or zones:GetChildren()[1].Name
 			end
-			farming.__sproutOrigField = nil
 		end
 
-		local targetField = actives["field"]
 		if targetField and targetField ~= sField then
+			actives["field"] = targetField
 			mod.movement.move("go_to_field", actives["walkspeed"], targetField, function()
 				if actives["mask"] ~= "None" then
 					mod.convert.equip_mask(actives["mask"])
@@ -479,19 +469,34 @@ function farming.sprout(...)
 				farming.sproutActive = false
 			end)
 		else
+			if sField then actives["field"] = sField end
 			farming.sproutActive = false
 		end
 	end
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
 		task.wait(.4)
-		
+
 		if movement.stop then
 			pcall(movement.stop)
 		end
-		
+
 		if sproutId ~= farming.__sproutId or actives["auto_farm"] ~= true then
+			local returnField = farming.__sproutOrigField
+			farming.__sproutOrigField = nil
+
+			if returnField then
+				actives["field"] = returnField
+			end
+
 			farming.sproutActive = false
+			if actives["auto_farm"] == true and returnField then
+				task.spawn(function()
+					mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
+						farming.farm()
+					end)
+				end)
+			end
 			return
 		end
 		
@@ -694,24 +699,12 @@ function farming.puffsrooms(...)
 			farming.__pendingPuff = nil
 			shroom = listShrooms()[1]
 			if not shroom then
-				task.spawn(function()
-					local waitStart = tick()
-					local maxWait = tonumber(actives["puff_wait_time"]) or 10
-					while tick() - waitStart < maxWait do
-						if actives["auto_farm"] ~= true then return end
-						task.wait(1)
-						if listShrooms()[1] then
-							farming.puffsrooms(true)
-							return
-						end
-					end
-
-					farming.puffActive = false
-
-					local returnField = farming.__puffOrigField or actives["field"]
-					farming.__puffOrigField = nil
-					if returnField then
-						actives["field"] = returnField
+				farming.puffActive = false
+				local returnField = farming.__puffOrigField or actives["field"]
+				farming.__puffOrigField = nil
+				if returnField then
+					actives["field"] = returnField
+					task.spawn(function()
 						mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
 							if actives["mask"] ~= "None" then
 								mod.convert.equip_mask(actives["mask"])
@@ -720,8 +713,8 @@ function farming.puffsrooms(...)
 								farming.sprinkler(true)
 							end
 						end)
-					end
-				end)
+					end)
+				end
 				return
 			end
 		end
@@ -756,13 +749,28 @@ function farming.puffsrooms(...)
 	
 	mod.movement.move("move", actives["walkspeed"], position, function()
 		task.wait(.4)
-		
+
 		if movement.stop then
 			pcall(movement.stop)
 		end
-		
+
 		if puffId ~= farming.__puffId or actives["auto_farm"] ~= true then
+			local returnField = farming.__puffOrigField
+			farming.__puffOrigField = nil
+
+			if returnField then
+				actives["field"] = returnField
+			end
+
 			farming.puffActive = false
+
+			if actives["auto_farm"] == true and returnField then
+				task.spawn(function()
+					mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
+						farming.farm()
+					end)
+				end)
+			end
 			return
 		end
 		
@@ -911,18 +919,20 @@ function farming.puffsrooms(...)
 		local waitStart = tick()
 		local maxWait   = tonumber(actives["puff_wait_time"]) or 10
 		local foundNew  = false
-
-		while tick() - waitStart < maxWait do
-			if actives["auto_farm"] ~= true or puffId ~= farming.__puffId then
-				break
-			end
-			task.wait(1)
-			if puffId == farming.__puffId then
-				farming.__puffStartTime = tick()
-			end
-			if listShrooms()[1] then
-				foundNew = true
-				break
+		
+		if listShrooms()[1] then
+			while tick() - waitStart < maxWait do
+				if actives["auto_farm"] ~= true or puffId ~= farming.__puffId then
+					break
+				end
+				task.wait(1)
+				if puffId == farming.__puffId then
+					farming.__puffStartTime = tick()
+				end
+				if listShrooms()[1] then
+					foundNew = true
+					break
+				end
 			end
 		end
 		
@@ -939,22 +949,25 @@ function farming.puffsrooms(...)
 			return
 		end
 		
-		local returnField = farming.__puffOrigField or actives["field"]
+		local returnField = farming.__puffOrigField
 		farming.__puffOrigField = nil
+		
+		if not returnField then
+			local zones = workspace:FindFirstChild("FlowerZones")
+			if zones and #zones:GetChildren() > 0 then
+				returnField = actives["field"] or zones:GetChildren()[1].Name
+			end
+		end
 
-		if returnField and actives["auto_farm"] == true then
+		if returnField then
 			actives["field"] = returnField
 			mod.movement.move("go_to_field", actives["walkspeed"], returnField, function()
 				if actives["mask"] ~= "None" then mod.convert.equip_mask(actives["mask"]) end
 				if actives["sprinkler"] then farming.sprinkler(true) end
-				if puffId == farming.__puffId then
-					farming.puffActive = false
-				end
+				farming.puffActive = false
 			end)
 		else
-			if puffId == farming.__puffId then
-				farming.puffActive = false
-			end
+			farming.puffActive = false
 		end
 	end)
 end
@@ -962,12 +975,27 @@ end
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
-	
+
 	if not status then
+		if farming.sproutActive then
+			farming.sproutActive = false
+			farming.__sproutId = (farming.__sproutId or 0) + 1
+			if farming.__sproutOrigField then
+				actives["field"] = farming.__sproutOrigField
+				farming.__sproutOrigField = nil
+			end
+		end
+		if farming.puffActive then
+			farming.puffActive = false
+			farming.__puffId = (farming.__puffId or 0) + 1
+			if farming.__puffOrigField then
+				actives["field"] = farming.__puffOrigField
+				farming.__puffOrigField = nil
+			end
+		end
 		actives.move = false
 		return
 	end
-	
 	if farmingActive then
 		return
 	end
@@ -1131,6 +1159,12 @@ function farming.farm(...)
 				local quickInfo = mod.convert.get_pollen_info()
 				local quickThr = actives["backpack"] or 80
 				if quickInfo and quickInfo.percent >= quickThr and quickInfo.pollen > 0 then
+					local now = tick()
+					if mod.convert and mod.convert.__failedAt and (now - mod.convert.__failedAt) < 30 then
+						task.wait(1)
+						continue
+					end
+
 					local quickHive = select(1, farming.getHive())
 					if quickHive then
 						lastConvertTime = tick()
@@ -1454,6 +1488,12 @@ function farming.farm(...)
 				local byTime = (tick() - lastConvertTime) >= interval
 
 				if byBackpack or byTime then
+					local now = tick()
+					if mod.convert and mod.convert.__failedAt and (now - mod.convert.__failedAt) < 30 then
+						task.wait(1)
+						continue
+					end
+
 					local currentPos = select(1, farming.getHive())
 					if not currentPos then
 						farmingActive = false
@@ -1540,7 +1580,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
@@ -1577,7 +1617,13 @@ local function respawn(...)
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
 		farming.__groundTicks = 0
-
+		farming.__watchdogPos = nil
+		farming.__watchdogStuck = 0
+		
+		if mod.convert then
+			mod.convert.__failedAt = nil
+		end
+		
 		farming.sproutActive = false
 		farming.__pendingSprout = nil
 		farming.__sproutOrigField = nil
@@ -1607,5 +1653,45 @@ if find.player.Character then
 end
 
 farming.resetCharacterState = resetCharacterState
+
+task.spawn(function()
+	while true do
+		task.wait(5)
+
+		local should_check = actives["auto_farm"] == true
+			and not farmingActive
+			and not farming.__goingToHive
+			and not actives["convert"]
+
+		if should_check then
+			local character = find.player.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+
+			if root then
+				if not farming.__watchdogPos then
+					farming.__watchdogPos = root.Position
+					farming.__watchdogStuck = 0
+				else
+					local moved = (root.Position - farming.__watchdogPos).Magnitude
+					if moved < 3 then
+						farming.__watchdogStuck = (farming.__watchdogStuck or 0) + 1
+						if farming.__watchdogStuck >= 4 then -- 4 * 5s = 20s без движения
+							warn("[farming] watchdog: bot stuck for 20s, restarting farm")
+							farming.__watchdogStuck = 0
+							farming.__watchdogPos = nil
+							if farming.farm then farming.farm() end
+						end
+					else
+						farming.__watchdogStuck = 0
+						farming.__watchdogPos = root.Position
+					end
+				end
+			end
+		else
+			farming.__watchdogPos = nil
+			farming.__watchdogStuck = 0
+		end
+	end
+end)
 
 return farming
