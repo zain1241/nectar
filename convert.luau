@@ -337,8 +337,9 @@ function convert.convert(...)
 
 		local textBox = button:FindFirstChild("TextBox", true)
 
-		if textBox and textBox:IsA("TextLabel") then
-			return textBox.Text == "Stop Making Honey"
+		if textBox and (textBox:IsA("TextLabel") or textBox:IsA("TextButton")) then
+			local txt = string.lower(textBox.Text)
+			return string.find(txt, "stop") ~= nil
 		end
 
 		return false
@@ -358,9 +359,9 @@ function convert.convert(...)
 	
 	local beforePollen = getPollen()
 	local started = isMakingHoney()
-	
+
 	if not started then
-		if not beforePollen or beforePollen <= 0 then
+		if beforePollen and beforePollen <= 0 then
 			actives["convert"] = false
 			actives["move"] = false
 			actives["last_time_convert"] = tick()
@@ -393,34 +394,40 @@ function convert.convert(...)
 	end
 	
 	local start = tick()
-	
+
 	while tick() - start < 6 do
 		if isMakingHoney() then
 			started = true
 			break
 		end
-		
+
+		if tick() - start > 0 and math.floor(tick() - start) % 3 == 0 then
+			pcall(function()
+				hiveCommand:FireServer("ToggleHoneyMaking")
+			end)
+		end
+
 		task.wait(.1)
 	end	
 	
-	if not started then
-		warn("make honey not started")
+	--if not started then
+	--	warn("make honey not started")
 
-		actives["convert"] = false
-		actives["move"] = false
+	--	actives["convert"] = false
+	--	actives["move"] = false
 
-		task.defer(function()
-			task.wait(7)
+	--	task.defer(function()
+	--		task.wait(15)
 
-			if actives["auto_farm"] then
-				if farming and farming.farm then
-					farming.farm()
-				end
-			end
-		end)
+	--		if actives["auto_farm"] then
+	--			if farming and farming.farm then
+	--				farming.farm()
+	--			end
+	--		end
+	--	end)
 
-		return
-	end
+	--	return
+	--end
 	
 	local startTime = tick()
 	local pollenZeroSince = nil
@@ -537,7 +544,7 @@ function convert.convert(...)
 					local balloon = nil
 					local start = tick()
 
-					while tick() - start < 3 do
+					while tick() - start < 10 do
 						if not actives["auto_farm"] then
 							break
 						end
@@ -547,14 +554,14 @@ function convert.convert(...)
 							break
 						end
 
-						task.wait(.5)
+						task.wait(.1)
 					end
 
 					if balloon then
 						local popStart = tick()
 						local timeout = 300
 						while balloon.Parent and actives["auto_farm"] and (tick() - popStart) < timeout do
-							task.wait(.2)
+							task.wait(.5)
 						end
 
 						if balloon.Parent then
@@ -580,6 +587,8 @@ function convert.convert(...)
 		end
 	)
 end
+
+print(123123)
 
 function convert.equip_mask(name)
 	--print(2)
