@@ -306,6 +306,8 @@ end
 function convert.convert(...)
 	local a = {...}
 	
+	actives["convert"] = true
+	
 	if actives["honey_mask"] then
 		convert.honey_mask()
 		task.wait(.5)
@@ -491,6 +493,16 @@ function convert.convert(...)
 			end
 			
 			task.spawn(function()
+				local function markResult()
+					local afterPollen = getPollen()
+					if afterPollen and afterPollen > 0 then
+						convert.__failedAt = tick()
+						warn("convert failed: pollen still " .. tostring(afterPollen))
+					else
+						convert.__failedAt = nil
+					end
+				end
+
 				if actives["balloon"] then
 					local function findBalloon()
 						local balloons = workspace:FindFirstChild("Balloons")
@@ -538,7 +550,7 @@ function convert.convert(...)
 					local balloon = nil
 					local start = tick()
 
-					while tick() - start < 10 do
+					while tick() - start < 3 do
 						if not actives["auto_farm"] then
 							break
 						end
@@ -566,10 +578,12 @@ function convert.convert(...)
 					end
 				end
 				
+				markResult()
+
 				actives["last_time_convert"] = tick()
 				actives["convert"] = false
 				actives["move"] = false
-				
+
 				if actives["auto_farm"] then
 					if farming and farming.farm then
 						local mask = actives["mask"]
@@ -587,7 +601,7 @@ function convert.convert(...)
 	)
 end
 
-print(123123)
+print(4444)
 
 function convert.equip_mask(name)
 	--print(2)
