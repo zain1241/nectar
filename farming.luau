@@ -41,7 +41,7 @@ local function resetCharacterState()
 	if not humanoid then
 		return
 	end
-
+	
 	humanoid.PlatformStand = false
 	pcall(function()
 		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -143,16 +143,16 @@ local function getStats(...)
 	if not humanoid then
 		return
 	end
-
+	
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	if not events then
 		return nil
 	end
-
+	
 	local ok, result = pcall(function()
 		return events:WaitForChild("RetrievePlayerStats"):InvokeServer()
 	end)
-
+	
 	if ok and type(result) == "table" then
 		return result
 	end
@@ -181,7 +181,7 @@ function farming.sprinkler(...)
 	if not command then
 		return false
 	end
-
+	
 	local now = tick()
 	if now - (farming.__lastSprinklerAt or 0) < 4 then
 		return
@@ -241,23 +241,23 @@ end
 
 function farming.dig(...)
 	local a = {...}
-
+	
 	if a[1] ~= true then
 		return
 	end
-
+	
 	if dig then
 		dig:Disconnect()
 		dig = nil
 	end
-
+	
 	local events = game:GetService("ReplicatedStorage"):FindFirstChild("Events")
 	local collect = events and events:FindFirstChild("ToolCollect")
 	if not collect or not collect:IsA("RemoteEvent") then
 		warn("tool is not find")
 		return
 	end
-
+	
 	dig = farming.conAF(
 		find.prerender, 2,
 		function(delta)
@@ -278,7 +278,7 @@ function farming.lockWalkSpeed()
 		walkSpeedLock:Disconnect()
 		walkSpeedLock = nil
 	end
-
+	
 	walkSpeedLock = farming.conAF(
 		find.prerender, 2,
 		function(delta)
@@ -291,7 +291,7 @@ function farming.lockWalkSpeed()
 				if type(want) ~= "number" then
 					want = 16
 				end
-
+				
 				local slider = actives["massles_slider"]
 				if actives["massles"] then
 					local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -597,6 +597,28 @@ local function moveWithTimeout(mode, speed, destination, callback, timeout, onFa
 	end
 end
 
+-- Hand field return back to the normal AutoFarm route.
+-- This avoids competing movement callbacks and guarantees the main loop rebuilds its route.
+local function requestFieldRecovery(reason)
+	if actives["auto_farm"] ~= true then
+		return
+	end
+
+	farming.__forceFieldReturn = true
+	if reason then
+		warn("[special farm] requesting normal field recovery:", reason)
+	end
+
+	task.delay(2, function()
+		if farming.__forceFieldReturn and actives["auto_farm"] == true and not farmingActive then
+			farming.__forceFieldReturn = nil
+			task.spawn(function()
+				farming.farm()
+			end)
+		end
+	end)
+end
+
 -- Wait until the converter's own completion callback has finished (including mask handling).
 -- This prevents the special-farm movement from racing the conversion callback.
 local function convertAndWait(isCurrent, label)
@@ -784,61 +806,23 @@ function farming.sprout(...)
 	local function returnToField()
 		if sproutId ~= farming.__sproutId then return end
 		farming.__sproutStartTime = nil
+
 		if actives["auto_farm"] ~= true then
 			clearSproutState()
 			return
 		end
 
 		local sproutField = getZone(position)
-		local currentCharacter = find.player.Character
-		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-		local currentField = currentRoot and getZone(currentRoot.Position)
 		local returnField = farming.__sproutOrigField or actives["field"] or sproutField
-		if not returnField then
-			clearSproutState()
-			return
+		if returnField then
+			actives["field"] = returnField
 		end
 
-		actives["field"] = returnField
-		if returnField == currentField then
-			if actives["mask"] and actives["mask"] ~= "None" then
-				pcall(function() mod.convert.equip_mask(actives["mask"]) end)
-			end
-			if actives["sprinkler"] then pcall(function() farming.sprinkler(true) end) end
-			clearSproutState()
-			return
-		end
-
+		-- Do not start a second go_to_field movement from this callback.
+		-- Hand control back to the normal AutoFarm route, which owns its movement lifecycle.
 		if movement.stop then pcall(movement.stop) end
-		local completed = false
-		local function completeReturn()
-			if completed then return end
-			completed = true
-			if sproutId ~= farming.__sproutId then return end
-			if actives["auto_farm"] == true then
-				if actives["mask"] and actives["mask"] ~= "None" then
-					pcall(function() mod.convert.equip_mask(actives["mask"]) end)
-				end
-				if actives["sprinkler"] then pcall(function() farming.sprinkler(true) end) end
-			end
-			clearSproutState()
-		end
-
-		task.delay(45, function()
-			if not completed and sproutId == farming.__sproutId then
-				warn("[sprout] return movement timed out; releasing special farm state")
-				if movement.stop then pcall(movement.stop) end
-				completeReturn()
-			end
-		end)
-
-		local ok, err = pcall(function()
-			mod.movement.move("go_to_field", actives["walkspeed"], returnField, completeReturn)
-		end)
-		if not ok then
-			warn("[sprout] return movement failed:", err)
-			completeReturn()
-		end
+		clearSproutState()
+		requestFieldRecovery("Sprout collection finished; routing back to the selected field")
 	end
 
 	local function collectAtPosition()
@@ -1157,60 +1141,23 @@ function farming.puffsrooms(...)
 		if puffId ~= farming.__puffId then return end
 		farming.__puffStartTime = nil
 		farming.__puffWaiting = nil
+
 		if actives["auto_farm"] ~= true then
 			clearPuffState()
 			return
 		end
 
 		local puffField = getZone(position)
-		local currentCharacter = find.player.Character
-		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-		local currentField = currentRoot and getZone(currentRoot.Position)
 		local returnField = farming.__puffOrigField or actives["field"] or puffField
-		if not returnField then
-			clearPuffState()
-			return
-		end
-		actives["field"] = returnField
-
-		local function completeReturn()
-			if puffId ~= farming.__puffId then return end
-			if actives["auto_farm"] == true then
-				if actives["mask"] and actives["mask"] ~= "None" then
-					pcall(function() mod.convert.equip_mask(actives["mask"]) end)
-				end
-				if actives["sprinkler"] then pcall(function() farming.sprinkler(true) end) end
-			end
-			clearPuffState()
+		if returnField then
+			actives["field"] = returnField
 		end
 
-		if returnField == currentField then
-			completeReturn()
-			return
-		end
-
+		-- Reuse AutoFarm's normal route instead of starting a competing move.
+		-- This avoids waiting for an event-local go_to_field callback that may never fire.
 		if movement.stop then pcall(movement.stop) end
-		local completed = false
-		local function guardedComplete()
-			if completed then return end
-			completed = true
-			completeReturn()
-		end
-		task.delay(45, function()
-			if not completed and puffId == farming.__puffId then
-				warn("[puffshroom] return movement timed out; releasing special farm state")
-				if movement.stop then pcall(movement.stop) end
-				guardedComplete()
-			end
-		end)
-
-		local ok, err = pcall(function()
-			mod.movement.move("go_to_field", actives["walkspeed"], returnField, guardedComplete)
-		end)
-		if not ok then
-			warn("[puffshroom] return movement failed:", err)
-			guardedComplete()
-		end
+		clearPuffState()
+		requestFieldRecovery("Puffshroom collection finished; routing back to the selected field")
 	end
 
 	local function findNextShroom()
@@ -1460,22 +1407,23 @@ function farming.farm(...)
 		end
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
+		farming.__forceFieldReturn = nil
 		actives.move = false
 		return
 	end
 	if farmingActive then
 		return
 	end
-
+	
 	actives.move = false
-
+	
 	lastConvertTime = lastConvertTime or tick()
 	--if not status then
 	--	return farming.noClip(status)
 	--end --return if not active
-
+	
 	--farming.noClip(status)
-
+	
 	local hivePos, hiveId = farming.getHive()
 	--print(hivePos, hiveId, "423")
 	if hivePos == nil and hiveId == nil then
@@ -1485,13 +1433,13 @@ function farming.farm(...)
 		table.clear(queue["tokens"])
 		return
 	end
-
+	
 	local field = actives["field"]
 	local fields = workspace:FindFirstChild("FlowerZones")
 	if not fields then
 		return warn("not found")
 	end
-
+	
 	local function randomTokens(...)
 		local a = {...}
 		local part = a[1]
@@ -1541,7 +1489,7 @@ function farming.farm(...)
 			return
 		end
 		farmingActive = true
-
+		
 		local fieldChanged = false
 
 		local ok, err = pcall(function()
@@ -1551,9 +1499,9 @@ function farming.farm(...)
 			if not humanoid or not root then
 				return
 			end
-
+			
 			actives["move"] = true
-
+			
 			local function isTokenInField(token, field)
 				local p = field.CFrame:PointToObjectSpace(token.Position)
 				local s = field.Size / 2
@@ -1607,6 +1555,12 @@ function farming.farm(...)
 			local stuckTicks = 0
 
 			while actives["auto_farm"] == true do
+				if farming.__forceFieldReturn then
+					farming.__forceFieldReturn = nil
+					fieldChanged = true
+					break
+				end
+
 				actives["move"] = true
 
 				if find.player.Character ~= character then
@@ -1622,7 +1576,7 @@ function farming.farm(...)
 					stuckTicks = 0
 				end
 				lastRootPos = root.Position
-
+				
 				local quickInfo = mod.convert.get_pollen_info()
 				local quickThr = actives["backpack"] or 80
 				if quickInfo and quickInfo.percent >= quickThr and quickInfo.pollen > 0 then
@@ -1646,11 +1600,11 @@ function farming.farm(...)
 						return
 					end
 				end
-
+				
 				if actives["move"] and not farming.__goingToHive then
 					local currentState = humanoid:GetState()
 					local onGround = (currentState == Enum.HumanoidStateType.Running  or currentState == Enum.HumanoidStateType.RunningNoPhysics or currentState == Enum.HumanoidStateType.Landed)
-
+					
 					if onGround then
 						farming.__groundTicks = (farming.__groundTicks or 0) + 1
 						if farming.__groundTicks > 300 then
@@ -1984,7 +1938,7 @@ function farming.farm(...)
 				task.wait()
 			end
 		end)
-
+		
 		farmingActive = false
 		actives["move"] = false
 		if not ok then
@@ -2013,14 +1967,14 @@ function farming.farm(...)
 			task.spawn(metod)
 		end
 	end
-
+	
 	if farming.__pendingSprout and farming.__pendingSprout.Parent then
 		if not farmingActive then
 			task.spawn(metod)
 		end
 		return
 	end
-
+	
 	if hivePos ~= nil and not farming.__goingToHive then
 		resetCharacterState()
 		mod.movement.move("go_to_field", walkspeed, field, function()
@@ -2030,7 +1984,7 @@ function farming.farm(...)
 			if not farmingActive then
 				task.spawn(metod)
 			end
-
+			
 			if actives["mask"] ~= "None" then
 				local mask = actives["mask"]
 				mod.convert.equip_mask(mask)
@@ -2047,7 +2001,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
@@ -2055,11 +2009,11 @@ task.spawn(function()
 	if actives["auto_farm"] then
 		farming.farm()
 	end
-
+	
 	if actives["dig"] then
 		farming.dig(true)
 	end
-
+	
 end)
 
 local function respawn(...)
@@ -2067,15 +2021,15 @@ local function respawn(...)
 	local a = {...}
 	if a[1] then
 		task.wait(1)
-
+		
 		if movement.stop then
 			movement.stop()
 		end
-
+		
 		farmingActive = false
 		actives["move"] = false
 		lastConvertTime = tick()
-
+		
 		farming.puffActive = false
 		farming.__pendingPuff = nil
 		farming.__puffOrigField = nil
@@ -2083,14 +2037,15 @@ local function respawn(...)
 		farming.__puffWaiting = nil
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
+		farming.__forceFieldReturn = nil
 		farming.__groundTicks = 0
 		farming.__watchdogPos = nil
 		farming.__watchdogStuck = 0
-
+		
 		if mod.convert then
 			mod.convert.__failedAt = nil
 		end
-
+		
 		farming.sproutActive = false
 		farming.__pendingSprout = nil
 		farming.__sproutOrigField = nil
@@ -2099,11 +2054,11 @@ local function respawn(...)
 
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
-
+		
 		if actives["auto_farm"] then
 			farming.farm()
 		end
-
+		
 		if actives["dig"] then
 			farming.dig(true)
 		end
