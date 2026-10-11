@@ -1454,6 +1454,9 @@ function farming.farm(...)
 	local walkspeed = actives.walkspeed
 
 	if not status then
+		-- Invalidate any pending return-to-field movement when AutoFarm is disabled.
+		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
+		farming.__fieldRouteInProgress = false
 		if farming.sproutActive or farming.__pendingSprout or farming.__sproutOrigField then
 			farming.sproutActive = false
 			farming.__sproutId = (farming.__sproutId or 0) + 1
@@ -2083,32 +2086,59 @@ function farming.farm(...)
 	end
 	
 	if hivePos ~= nil and not farming.__goingToHive then
+		if not field then
+			warn("[farming] cannot return to field: selected field was not found:", tostring(actives["field"]))
+			return
+		end
+		if farming.__fieldRouteInProgress then
+			return
+		end
+
 		resetCharacterState()
-		mod.movement.move("go_to_field", walkspeed, field, function()
+		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
+		local routeId = farming.__fieldRouteId
+		farming.__fieldRouteInProgress = true
+		warn("[farming] returning to field:", tostring(actives["field"]))
+
+		moveWithTimeout("go_to_field", walkspeed, field, function()
+			if routeId ~= farming.__fieldRouteId then return end
+			farming.__fieldRouteInProgress = false
+			farming.__fieldRouteRetries = 0
 			if not actives["auto_farm"] then
 				return
 			end
+			warn("[farming] reached field; resuming AutoFarm")
 			if not farmingActive then
 				task.spawn(metod)
 			end
-			
-			if actives["mask"] ~= "None" then
+			if actives["mask"] and actives["mask"] ~= "None" then
 				local mask = actives["mask"]
-				mod.convert.equip_mask(mask)
+				pcall(function() mod.convert.equip_mask(mask) end)
 			end
-
 			if actives["sprinkler"] then
 				farming.sprinkler(true)
 			end
-
-			--if actives["honey_mask"] then
-			--	mod.convert.honey_mask()
-			--end
-		end) -- go to field
+		end, 30, function(reason)
+			if routeId ~= farming.__fieldRouteId then return end
+			farming.__fieldRouteInProgress = false
+			farmingActive = false
+			actives["move"] = false
+			farming.__fieldRouteRetries = (farming.__fieldRouteRetries or 0) + 1
+			warn("[farming] return-to-field route timed out; retry", farming.__fieldRouteRetries, "reason:", tostring(reason))
+			task.delay(math.min(10, 2 + farming.__fieldRouteRetries), function()
+				if routeId == farming.__fieldRouteId and actives["auto_farm"] == true
+					and not farming.__goingToHive
+					and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
+					farming.farm()
+				end
+			end)
+		end, function()
+			return routeId == farming.__fieldRouteId
+		end)
 	end
 end
 
-print(1111)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
@@ -2145,6 +2175,9 @@ local function respawn(...)
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
 		farming.__forceFieldReturn = nil
+		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
+		farming.__fieldRouteInProgress = false
+		farming.__fieldRouteRetries = 0
 		farming.__groundTicks = 0
 		farming.__watchdogPos = nil
 		farming.__watchdogStuck = 0
@@ -2190,6 +2223,7 @@ task.spawn(function()
 		local should_check = actives["auto_farm"] == true
 			and not farmingActive
 			and not farming.__goingToHive
+			and not farming.__fieldRouteInProgress
 			and not actives["convert"]
 
 		if should_check then
