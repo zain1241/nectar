@@ -32,6 +32,27 @@ local queue = {
 	tokens = {},
 }
 
+local function resetCharacterState()
+	local character = find.player.Character
+	if not character then
+		return
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+	
+	humanoid.PlatformStand = false
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end)
+	task.wait(0.1)
+	pcall(function()
+		humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	end)
+	task.wait(0.1)
+end
+
 function farming.Hive(...)
 	--
 end
@@ -542,6 +563,54 @@ function farming.sprout(...)
 			pcall(function() humanoid:MoveTo(target) end)
 			task.wait(0.08)
 		end
+		
+		local dropPos = position
+		local collectEnd = tick() + 20
+		local cTarget, cToken = nil, nil
+
+		while tick() < collectEnd and actives["auto_farm"] == true and sproutId == farming.__sproutId do
+			if not root or not root.Parent then break end
+
+			local center = Vector3.new(dropPos.X, root.Position.Y, dropPos.Z)
+			local needNew = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5)
+
+			if cToken and (not cToken.Parent or cToken.Transparency > 0) then
+				needNew = true
+			end
+
+			if needNew then
+				local collectibles = workspace:FindFirstChild("Collectibles")
+				local best, bestDist = nil, nil
+				if collectibles then
+					for _, v in ipairs(collectibles:GetChildren()) do
+						if v:IsA("BasePart") and v.Transparency <= 0 and (v.Position - center).Magnitude <= 40 then
+							local d = (v.Position - root.Position).Magnitude
+							if not bestDist or d < bestDist then
+								best, bestDist = v, d
+							end
+						end
+					end
+				end
+
+				if best then
+					cTarget = Vector3.new(best.Position.X, root.Position.Y, best.Position.Z)
+					cToken = best
+				else
+					local ang = find.random:NextNumber(0, math.pi * 2)
+					local t = find.random:NextNumber() ^ 0.6
+					local r = 3 + (15 - 3) * t
+					cTarget = Vector3.new(
+						center.X + math.cos(ang) * r,
+						root.Position.Y,
+						center.Z + math.sin(ang) * r
+					)
+					cToken = nil
+				end
+			end
+
+			pcall(function() humanoid:MoveTo(cTarget) end)
+			task.wait(0.05)
+		end
 
 		finish()
 	end)
@@ -768,7 +837,7 @@ function farming.puffsrooms(...)
 		
 		local dropPos = position
 		local collectEnd = tick() + 5
-		local cTarget = nil
+		local cTarget, cToken = nil, nil
 
 		while tick() < collectEnd and actives["auto_farm"] == true and puffId == farming.__puffId do
 			if not root or not root.Parent then
@@ -776,26 +845,30 @@ function farming.puffsrooms(...)
 			end
 
 			local center = Vector3.new(dropPos.X, root.Position.Y, dropPos.Z)
-			local stale = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5)
+			local needNew = (not cTarget) or ((Vector3.new(cTarget.X, root.Position.Y, cTarget.Z) - root.Position).Magnitude < 1.5)
 
-			if stale then
+			if cToken and (not cToken.Parent or cToken.Transparency > 0) then
+				needNew = true
+			end
+
+			if needNew then
 				local collectibles = workspace:FindFirstChild("Collectibles")
-				local token = nil
+				local best, bestDist = nil, nil
 				if collectibles then
-					local bestDist = nil
 					for _, v in ipairs(collectibles:GetChildren()) do
 						if v:IsA("BasePart") and v.Transparency <= 0
 							and (v.Position - center).Magnitude <= 40 then
 							local d = (v.Position - root.Position).Magnitude
 							if not bestDist or d < bestDist then
-								token, bestDist = v, d
+								best, bestDist = v, d
 							end
 						end
 					end
 				end
 
-				if token then
-					cTarget = Vector3.new(token.Position.X, root.Position.Y, token.Position.Z)
+				if best then
+					cTarget = Vector3.new(best.Position.X, root.Position.Y, best.Position.Z)
+					cToken = best
 				else
 					local ang = find.random:NextNumber(0, math.pi * 2)
 					local t = find.random:NextNumber() ^ 0.6
@@ -805,6 +878,7 @@ function farming.puffsrooms(...)
 						root.Position.Y,
 						center.Z + math.sin(ang) * r
 					)
+					cToken = nil
 				end
 			end
 
@@ -1053,6 +1127,41 @@ function farming.farm(...)
 					stuckTicks = 0
 				end
 				lastRootPos = root.Position
+				
+				local quickInfo = mod.convert.get_pollen_info()
+				local quickThr = actives["backpack"] or 80
+				if quickInfo and quickInfo.percent >= quickThr and quickInfo.pollen > 0 then
+					local quickHive = select(1, farming.getHive())
+					if quickHive then
+						lastConvertTime = tick()
+						farmingActive = false
+						actives["move"] = false
+						farming.__goingToHive = true
+						movement.move("hive", actives["walkspeed"], quickHive, function()
+							farming.__goingToHive = false
+							task.wait(1)
+							mod.convert.convert()
+						end)
+						return
+					end
+				end
+				
+				if actives["move"] and not farming.__goingToHive then
+					local currentState = humanoid:GetState()
+					local onGround = (currentState == Enum.HumanoidStateType.Running  or currentState == Enum.HumanoidStateType.RunningNoPhysics or currentState == Enum.HumanoidStateType.Landed)
+					
+					if onGround then
+						farming.__groundTicks = (farming.__groundTicks or 0) + 1
+						if farming.__groundTicks > 300 then
+							resetCharacterState()
+							farming.__groundTicks = 0
+						end
+					else
+						farming.__groundTicks = 0
+					end
+				else
+					farming.__groundTicks = 0
+				end
 
 				if stuckTicks > 600 and (farming.sproutActive or farming.puffActive) and not (farming.__pendingSprout or farming.__pendingPuff) then
 					farming.sproutActive = false
@@ -1406,6 +1515,7 @@ function farming.farm(...)
 	end
 	
 	if hivePos ~= nil and not farming.__goingToHive then
+		resetCharacterState()
 		mod.movement.move("go_to_field", walkspeed, field, function()
 			if not actives["auto_farm"] then
 				return
@@ -1430,7 +1540,7 @@ function farming.farm(...)
 	end
 end
 
-print(111111)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
@@ -1466,6 +1576,7 @@ local function respawn(...)
 		farming.__puffWaiting = nil
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
+		farming.__groundTicks = 0
 
 		farming.sproutActive = false
 		farming.__pendingSprout = nil
@@ -1494,5 +1605,7 @@ if find.player.Character then
 		respawn(find.player.Character)
 	end)
 end
+
+farming.resetCharacterState = resetCharacterState
 
 return farming
