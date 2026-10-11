@@ -2,16 +2,17 @@
 local env = (getgenv and getgenv()) or _G
 local loaded = rawget(env, "__NECTAR_MODULES")
 
-local data, farming, convert
-if loaded and loaded.data and loaded.farming and loaded.convert then
-	data, farming, convert = loaded.data, loaded.farming, loaded.convert
+local data, farming, convert, toys
+if loaded and loaded.data and loaded.farming and loaded.convert and loaded.toys then
+	data, farming, convert, toys = loaded.data, loaded.farming, loaded.convert, loaded.toys
 else
 	data = require(script.Parent:WaitForChild("data"))
 	farming = require(script.Parent:WaitForChild("farming"))
 	convert = require(script.Parent:WaitForChild("convert"))
+	toys = require(script.Parent:WaitForChild("toys"))
 end
 
-local mod = { data = data, farming = farming }
+local mod = { data = data, farming = farming, convert = convert, toys = toys }
 local actives = data.actives
 
 local menu = {}
@@ -93,6 +94,7 @@ local tweenservice = game:GetService("TweenService")
 local uis = game:GetService("UserInputService")
 local player = game:GetService("Players").LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local s_format = string.format
 
 local sections = {}
 local navigationButtons = {}
@@ -105,6 +107,219 @@ menu.colors = {
 	preview = PREVIEW_BG,
 	button_off = BTN_OFF,
 	button_on = Color3_fromRGB(255, 198, 74),
+}
+
+local Players = game:GetService("Players")
+local statsPlayer = Players.LocalPlayer
+
+local function formatNumber(n)
+	n = tonumber(n) or 0
+	if n >= 1e15 then return string.format("%.2fQa", n / 1e15) end
+	if n >= 1e12 then return string.format("%.2fT", n / 1e12) end
+	if n >= 1e9 then return string.format("%.2fB", n / 1e9) end
+	if n >= 1e6 then return string.format("%.2fM", n / 1e6) end
+	if n >= 1e3 then return string.format("%.2fK", n / 1e3) end
+	return tostring(math.floor(n))
+end
+
+local function formatTime(sec)
+	sec = math.max(0, math.floor(tonumber(sec) or 0))
+
+	local d = math.floor(sec / 86400)
+	local h = math.floor((sec % 86400) / 3600)
+	local m = math.floor((sec % 3600) / 60)
+	local s = sec % 60
+
+	if d > 0 then return string.format("%dd %dh %dm", d, h, m) end
+	if h > 0 then return string.format("%dh %dm %ds", h, m, s) end
+	if m > 0 then return string.format("%dm %ds", m, s) end
+
+	return s .. "s"
+end
+
+local function readNumericValue(obj)
+	if obj and (obj:IsA("NumberValue") or obj:IsA("IntValue")) then
+		return obj.Value
+	end
+
+	return nil
+end
+
+local function findCoreStat(name)
+	local coreStats = statsPlayer:FindFirstChild("CoreStats")
+	if not coreStats then return nil end
+
+	return readNumericValue(coreStats:FindFirstChild(name))
+end
+
+local function findPlayerValue(names)
+	local wanted = {}
+
+	for _, name in ipairs(names) do
+		wanted[string.lower(name):gsub("[^%w]", "")] = true
+	end
+
+	local roots = {
+		statsPlayer:FindFirstChild("CoreStats"),
+		statsPlayer:FindFirstChild("leaderstats"),
+		statsPlayer,
+	}
+
+	for _, root in ipairs(roots) do
+		if root then
+			for _, obj in ipairs(root:GetDescendants()) do
+				local name = string.lower(obj.Name):gsub("[^%w]", "")
+
+				if wanted[name] then
+					local value = readNumericValue(obj)
+					if value ~= nil then
+						return value
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+local function getCurrentPollen()
+	return findCoreStat("Pollen")
+		or findPlayerValue({"Pollen", "CurrentPollen"})
+end
+
+local function getCurrentHoney()
+	return findCoreStat("Honey")
+		or findPlayerValue({"Honey", "CurrentHoney", "HoneyBalance"})
+end
+
+local function getPlaytime()
+	local value = findPlayerValue({
+		"PlaytimeAtLoad",
+		"Playtime",
+		"PlayTime",
+		"TotalPlaytime",
+		"TotalPlayTime",
+		"PlaytimeSeconds",
+		"TimePlayed",
+		"TotalTimePlayed",
+	})
+
+	if value ~= nil then
+		return value
+	end
+
+	for _, name in ipairs({
+		"PlaytimeAtLoad",
+		"Playtime",
+		"PlayTime",
+		"TotalPlaytime",
+		"TotalPlayTime",
+		"TimePlayed",
+		}) do
+		local attribute = statsPlayer:GetAttribute(name)
+
+		if type(attribute) == "number" then
+			return attribute
+		end
+	end
+
+	return nil
+end
+
+local function getServerTime()
+	return formatTime(workspace.DistributedGameTime)
+end
+
+-- Трекер: считает сколько прибавилось за последние 60 сек, переводит в /час.
+-- Игнорирует падения (например, когда пыльца обнулилась после конверта).
+local function makeRateTracker(getter)
+	local samples = {}
+	local lastV = nil
+	local lastT = nil
+	local WINDOW = 60 -- окно в секундах
+
+	return function()
+		local value = getter()
+		if value == nil then return nil, nil end
+
+		local now = tick()
+
+		-- если значение выросло — записываем прирост
+		if lastV ~= nil and lastT ~= nil and now > lastT then
+			local delta = value - lastV
+			if delta > 0 then
+				table.insert(samples, { t = now, amount = delta })
+			end
+		end
+
+		lastV = value
+		lastT = now
+
+		-- чистим старые сэмплы
+		while #samples > 0 and (now - samples[1].t) > WINDOW do
+			table.remove(samples, 1)
+		end
+
+		-- считаем сумму приростов и время
+		local total = 0
+		for i = 1, #samples do
+			total = total + samples[i].amount
+		end
+
+		local rate = 0
+		if #samples >= 2 then
+			local span = now - samples[1].t
+			if span > 1 then
+				rate = total / span * 3600 -- в час
+			end
+		end
+
+		return value, rate
+	end
+end
+
+local pollenTracker = makeRateTracker(getCurrentPollen)
+local honeyTracker = makeRateTracker(getCurrentHoney)
+
+local statsRows = {
+	{
+		icon = "rbxassetid://1472135114",
+		get = function()
+			local value, rate = pollenTracker()
+			if value == nil then
+				return "Pollen: N/A"
+			end
+			local rateStr = rate and formatNumber(rate) or "0"
+			return "Pollen: " .. formatNumber(value) .. " (" .. rateStr .. "/h)"
+		end,
+	},
+
+	{
+		icon = "rbxassetid://1472135114",
+		get = function()
+			local value, rate = honeyTracker()
+			if value == nil then
+				return "Honey: N/A"
+			end
+			local rateStr = rate and formatNumber(rate) or "0"
+			return "Honey: " .. formatNumber(value) .. " (" .. rateStr .. "/h)"
+		end,
+	},
+
+	{
+		get = function()
+			local value = getPlaytime()
+			return "PlayTime: " ..
+				(value ~= nil and formatTime(value) or "N/A")
+		end,
+	},
+
+	{
+		get = function()
+			return "Server Uptime: " .. getServerTime()
+		end,
+	},
 }
 
 local function makeCorner(parent, r, bl, br, tl, tr)
@@ -583,13 +798,14 @@ function menu.main_nav()
 
 		navigationButtons[name] = b
 	end
+	
+	addNavigation("Home", "rbxassetid://15332137726", 1)
+	addNavigation("Farming", "rbxassetid://15332137726", 2)
+	--addNavigation("Planters", "rbxassetid://13060262529", 3)
+	addNavigation("Toys", "rbxassetid://102597526078163", 4)
+	addNavigation("Config", "rbxassetid://4857706689", 5)
 
-	addNavigation("Farming", "rbxassetid://15332137726", 1)
-	--addNavigation("Planters", "rbxassetid://13060262529", 2)
-	--addNavigation("Toys", "rbxassetid://102597526078163", 3)
-	addNavigation("Config", "rbxassetid://4857706689", 4)
-
-	showsel("Farming")
+	showsel("Home")
 end
 
 function menu.dop_create()
@@ -801,6 +1017,100 @@ function menu.dop_create()
 			menu.dop_objects[d.id] = o
 		end
 		return o
+	end
+	
+	local function addstats(parent, d, order)
+		if not parent or type(d) ~= "table" then return end
+
+		local rows = d.rows or {}
+
+		local r = Instance_new("Frame")
+		r.Name = d.name or "Stats"
+		r.BackgroundColor3 = ROW_BG
+		r.BackgroundTransparency = 0.2
+		r.AutomaticSize = Auto_Y
+		r.BorderSizePixel = 0
+		r.Size = UDim2_new(1.025, -12, 0, 30)
+		r.LayoutOrder = order or 0
+		r.ZIndex = 1004
+		r.Parent = parent
+		r:SetAttribute("search_text", s_lower(tostring(d.text or "stats")))
+		corner(r, UDim_new(0, 7))
+		makeList(r, UDim_new(0, 4), FillDir_V, HAlign_Center, VAlign_Top)
+		makeShadow(r)
+
+		local rp = Instance_new("UIPadding")
+		rp.PaddingLeft = UDim_new(0, 10)
+		rp.PaddingRight = UDim_new(0, 10)
+		rp.PaddingTop = UDim_new(0, 6)
+		rp.PaddingBottom = UDim_new(0, 6)
+		rp.Parent = r
+
+		local rowsCreated = {}
+
+		for i = 1, #rows do
+			local rowDef = rows[i]
+
+			local row = Instance_new("Frame")
+			row.Name = "Row" .. i
+			row.BackgroundTransparency = 1
+			row.Size = UDim2_new(1, 0, 0, 24)
+			row.LayoutOrder = i
+			row.ZIndex = 1004
+			row.Parent = r
+			makeList(row, UDim_new(0, 8), FillDir_H, HAlign_Left, VAlign_Center)
+
+			if rowDef.icon and rowDef.icon ~= "" then
+				local icon = Instance_new("ImageLabel")
+				icon.BackgroundTransparency = 1
+				icon.Size = UDim2_fromOffset(18, 18)
+				icon.Image = rowDef.icon
+				icon.ImageColor3 = WHITE
+				icon.ScaleType = Scale_Fit
+				icon.ZIndex = 1005
+				icon.LayoutOrder = 0
+				icon.Parent = row
+			end
+
+			local label = Instance_new("TextLabel")
+			label.BackgroundTransparency = 1
+			label.AutomaticSize = Auto_X
+			label.Size = UDim2_new(0, 0, 1, 0)
+			label.ZIndex = 1005
+			label.Font = Font_Medium
+			label.Text = rowDef.text or ""
+			label.TextColor3 = rowDef.color or WHITE
+			label.TextSize = 14
+			label.TextXAlignment = TextX_Left
+			label.LayoutOrder = 1
+			label.Parent = row
+
+			rowsCreated[i] = { label = label, def = rowDef }
+
+			if type(rowDef.get) == "function" then
+				local ok, val = pcall(rowDef.get)
+				if ok and val ~= nil then
+					label.Text = tostring(val)
+				end
+			end
+		end
+
+		task_spawn(function()
+			while r.Parent do
+				for i = 1, #rowsCreated do
+					local obj = rowsCreated[i]
+					if type(obj.def.get) == "function" then
+						local ok, val = pcall(obj.def.get)
+						if ok and val ~= nil then
+							obj.label.Text = tostring(val)
+						end
+					end
+				end
+				task_wait(1)
+			end
+		end)
+
+		return r
 	end
 
 	local function addinput(parent, d, order)
@@ -1548,6 +1858,8 @@ function menu.dop_create()
 			return addtokenpriority(parent, d, order)
 		elseif kind == "input" then
 			return addinput(parent, d, order)
+		elseif kind == "stats" then
+			return addstats(parent, d, order)
 		end
 		return addtext(parent, d, order)
 	end
@@ -1750,6 +2062,25 @@ function menu.dop_create()
 
 	local setting = {
 		{
+			name = "Home",
+			lists = {
+				{
+					name = "Stats",
+					opened = true,
+
+					items = {
+						{
+							type = "stats",
+							name = "PlayerStats",
+							text = "Pollen Honey PlayTime Server Time",
+							rows = statsRows,
+						},
+					},
+				},
+			},
+		},
+		
+		{
 			name = "Farming",
 			lists = {
 				{
@@ -1917,6 +2248,22 @@ function menu.dop_create()
 				--		},
 				--	},
 				--},
+			},
+		},
+		
+		{
+			name = "Toys",
+			lists = {
+				{
+					--settings
+					name = "Buffs",
+					opened = true,
+					--
+					items = {
+						{ type = "button", text = "Wealth Clock", key = "wealth", callback = toys.wealthClock },
+						{ type = "button", text = "Boosters", key = "boosters", callback = toys.boosters },
+					},
+				},
 			},
 		},
 		
