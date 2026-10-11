@@ -448,8 +448,25 @@ function convert.convert(...)
 					end
 				end)
 			else
-				convert.__retryScheduled = false
-				warn("[convert] stopped after 3 failed attempts; AutoFarm is held at the hive to prevent repeated trips")
+				-- Never leave AutoFarm permanently locked at the hive after 3 failures.
+				-- Keep the character at the hive (the backpack may still be full),
+				-- then start a fresh retry cycle after a short cooldown.
+				convert.__retryCount = 0
+				convert.__retryScheduled = true
+				warn("[convert] 3 attempts failed; automatically retrying at the hive in 15 seconds")
+
+				task.delay(15, function()
+					if not currentJob() then
+						return
+					end
+					convert.__retryScheduled = false
+
+					if actives["auto_farm"] == true and not convert.__running then
+						convert.convert()
+					else
+						setGoingToHive(false)
+					end
+				end)
 			end
 		else
 			convert.__retryScheduled = false
