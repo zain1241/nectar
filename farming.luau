@@ -892,11 +892,7 @@ function farming.sprout(...)
 		farming.__pendingSprout = nil
 		farming.sproutActive = false
 		farming.__sproutStartTime = tick()
-		moveToSpecialArea(function()
-			collectAtPosition()
-		end, "return to dropped tokens", function()
-			returnToField()
-		end)
+		returnToField()
 	end
 
 	local function goConvertThenResume(hivePosition)
@@ -1323,11 +1319,7 @@ function farming.puffsrooms(...)
 		farming.__pendingPuff = nil
 		farming.puffActive = false
 		farming.__puffStartTime = tick()
-		moveToSpecialArea(function()
-			collectAtPosition()
-		end, "return to dropped tokens", function()
-			finishAfterTokens()
-		end)
+		returnToField()
 	end
 
 	local function goConvertThenResume(hivePosition)
@@ -1460,6 +1452,13 @@ end
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
+	
+	warn("[farm-call] goingToHive=", farming.__goingToHive,
+		"convert=", actives["convert"],
+		"running=", mod.convert and mod.convert.__running,
+		"retrySched=", mod.convert and mod.convert.__retryScheduled,
+		"farmingActive=", farmingActive,
+		"fieldRoute=", farming.__fieldRouteInProgress)
 
 	if not status then
 		-- Invalidate any pending return-to-field movement when AutoFarm is disabled.
@@ -1716,7 +1715,15 @@ function farming.farm(...)
 								farming.__goingToHive = false
 								return
 							end
-							mod.convert.convert()
+							local started = mod.convert.convert()
+							if started == false and not mod.convert.__running then
+								farming.__goingToHive = false
+								task.delay(0.5, function()
+									if actives["auto_farm"] == true and not farmingActive then
+										farming.farm()
+									end
+								end)
+							end
 						end, 60, function(reason)
 							if hiveTripId ~= farming.__hiveTripId then return end
 							warn("[farming] backpack-threshold hive trip timed out:", reason)
@@ -2010,7 +2017,15 @@ function farming.farm(...)
 							farming.__goingToHive = false
 							return
 						end
-						mod.convert.convert()
+						local started = mod.convert.convert()
+						if started == false and not mod.convert.__running then
+							farming.__goingToHive = false
+							task.delay(0.5, function()
+								if actives["auto_farm"] == true and not farmingActive then
+									farming.farm()
+								end
+							end)
+						end
 					end, 60, function(reason)
 						if hiveTripId ~= farming.__hiveTripId then return end
 						warn("[farming] interval hive trip timed out:", reason)
@@ -2124,7 +2139,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(1111)
 
 task.spawn(function()
 	task.wait(2)
