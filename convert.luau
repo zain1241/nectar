@@ -392,19 +392,13 @@ function convert.convert(...)
 		end)
 		return
 	end
-	
-	local start = tick()
 
+	local start = tick()
+	
 	while tick() - start < 6 do
 		if isMakingHoney() then
 			started = true
 			break
-		end
-
-		if tick() - start > 0 and math.floor(tick() - start) % 3 == 0 then
-			pcall(function()
-				hiveCommand:FireServer("ToggleHoneyMaking")
-			end)
 		end
 
 		task.wait(.1)
@@ -561,7 +555,7 @@ function convert.convert(...)
 						local popStart = tick()
 						local timeout = 300
 						while balloon.Parent and actives["auto_farm"] and (tick() - popStart) < timeout do
-							task.wait(.5)
+							task.wait(.2)
 						end
 
 						if balloon.Parent then
@@ -588,7 +582,7 @@ function convert.convert(...)
 	)
 end
 
-print(123123)
+print(321321)
 
 function convert.equip_mask(name)
 	--print(2)
