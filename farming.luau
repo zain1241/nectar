@@ -605,6 +605,7 @@ local function requestFieldRecovery(reason)
 	end
 
 	farming.__forceFieldReturn = true
+	farming.__goingToHive = false
 	if reason then
 		warn("[special farm] requesting normal field recovery:", reason)
 	end
@@ -621,6 +622,7 @@ end
 
 -- Wait until the converter's own completion callback has finished (including mask handling).
 -- This prevents the special-farm movement from racing the conversion callback.
+-- Wait for conversion to succeed, including retries, before resuming Sprout/Puffshroom.
 local function convertAndWait(isCurrent, label)
 	local converter = mod.convert
 	if type(converter) ~= "table" or type(converter.convert) ~= "function" then
@@ -629,25 +631,19 @@ local function convertAndWait(isCurrent, label)
 	end
 
 	local previousFinishedAt = tonumber(converter.__conversionFinishedAt) or 0
-	local wasAlreadyConverting = actives["convert"] == true
-	if not wasAlreadyConverting then
-		local ok, err = pcall(function() converter.convert() end)
+
+	if not converter.__running then
+		local ok, err = pcall(function()
+			converter.convert()
+		end)
 		if not ok then
-			converter.__failedAt = tick()
 			warn("[" .. tostring(label) .. "] conversion call failed:", err)
-			task.wait(0.5)
 			return false
 		end
 	end
 
-	-- convert.convert() can return early without starting a conversion.
-	if not wasAlreadyConverting and actives["convert"] ~= true then
-		converter.__failedAt = tick()
-		task.wait(1)
-		return false
-	end
-
-	local deadline = tick() + 325
+	-- Three attempts can each take up to 300 seconds, plus two retry delays.
+	local deadline = tick() + 980
 	while tick() < deadline do
 		local okCurrent, current = pcall(isCurrent)
 		if not okCurrent or current ~= true then
@@ -656,15 +652,27 @@ local function convertAndWait(isCurrent, label)
 
 		local finishedAt = tonumber(converter.__conversionFinishedAt) or 0
 		if finishedAt > previousFinishedAt then
-			return true
+			previousFinishedAt = finishedAt
+
+			if converter.__conversionSuccess == true then
+				return true
+			end
+
+			if not converter.__running
+				and not converter.__retryScheduled
+				and (tonumber(converter.__retryCount) or 0) >= 2 then
+				warn("[" .. tostring(label) .. "] conversion failed after all retries; staying at hive instead of returning with full pollen")
+				return false
+			end
 		end
+
 		task.wait(0.25)
 	end
 
-	converter.__failedAt = tick()
-	warn("[" .. tostring(label) .. "] conversion completion timed out; resuming special farm safely")
+	warn("[" .. tostring(label) .. "] conversion wait exceeded its safety timeout; staying at hive")
 	return false
 end
+
 
 function farming.sprout(...)
 	local a = {...}
@@ -792,6 +800,32 @@ function farming.sprout(...)
 		return nil
 	end
 
+	local function moveToSpecialArea(onReached, failureLabel, onFailure)
+		local targetField = getZone(position)
+		local currentCharacter = find.player.Character
+		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
+		local currentField = currentRoot and getZone(currentRoot.Position)
+
+		local function fail(reason)
+			warn("[sprout] " .. tostring(failureLabel or "special-area movement") .. " failed:", reason)
+			if onFailure then onFailure(reason) end
+		end
+
+		local function moveExact()
+			moveWithTimeout("move", actives["walkspeed"], position, function()
+				if isCurrent() then onReached() end
+			end, 90, fail, isCurrent)
+		end
+
+		if targetField and currentField ~= targetField then
+			moveWithTimeout("go_to_field", actives["walkspeed"], targetField, function()
+				if isCurrent() then moveExact() end
+			end, 90, fail, isCurrent)
+		else
+			moveExact()
+		end
+	end
+
 	local function clearSproutState()
 		if sproutId ~= farming.__sproutId then return end
 		farming.sproutActive = false
@@ -854,25 +888,32 @@ function farming.sprout(...)
 
 		farming.__pendingSprout = nil
 		farming.__sproutStartTime = tick()
-		moveWithTimeout("move", actives["walkspeed"], position, function()
-			if not isCurrent() then return end
+		moveToSpecialArea(function()
 			collectAtPosition()
-		end, 45, function(reason)
-			warn("[sprout] failed to return to dropped tokens:", reason)
+		end, "return to dropped tokens", function()
 			returnToField()
-		end, isCurrent)
+		end)
 	end
 
 	local function goConvertThenResume(hivePosition)
 		farming.__pendingSprout = sprout
+		farming.__goingToHive = true
 		if movement.stop then pcall(movement.stop) end
 		moveWithTimeout("hive", actives["walkspeed"], hivePosition, function()
 			if sproutId ~= farming.__sproutId then return end
 			actives["move"] = false
-			convertAndWait(isCurrent, "sprout")
-			resumeAfterConversion()
+			local converted = convertAndWait(isCurrent, "sprout")
+			if converted then
+				resumeAfterConversion()
+			else
+				-- Keep the bot at the hive after failed conversion; never resume farming with a full backpack.
+				farming.__pendingSprout = nil
+				farming.sproutActive = false
+				farming.__sproutStartTime = nil
+			end
 		end, 60, function(reason)
 			warn("[sprout] movement to hive failed:", reason)
+			farming.__goingToHive = false
 			farming.__pendingSprout = nil
 			returnToField()
 		end, isCurrent)
@@ -982,10 +1023,9 @@ function farming.sprout(...)
 		end
 	end
 
-	moveWithTimeout("move", actives["walkspeed"], position, onArrived, 60, function(reason)
-		warn(lostPending and "[sprout] movement to old token area failed:" or "[sprout] movement to Sprout failed:", reason)
+	moveToSpecialArea(onArrived, lostPending and "movement to old token area" or "movement to Sprout", function()
 		returnToField()
-	end, isCurrent)
+	end)
 end
 
 function farming.puffsrooms(...)
@@ -1125,6 +1165,32 @@ function farming.puffsrooms(...)
 		return puffId == farming.__puffId and actives["auto_farm"] == true
 	end
 
+	local function moveToSpecialArea(onReached, failureLabel, onFailure)
+		local targetField = getZone(position)
+		local currentCharacter = find.player.Character
+		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
+		local currentField = currentRoot and getZone(currentRoot.Position)
+
+		local function fail(reason)
+			warn("[puffshroom] " .. tostring(failureLabel or "special-area movement") .. " failed:", reason)
+			if onFailure then onFailure(reason) end
+		end
+
+		local function moveExact()
+			moveWithTimeout("move", actives["walkspeed"], position, function()
+				if isCurrent() then onReached() end
+			end, 90, fail, isCurrent)
+		end
+
+		if targetField and currentField ~= targetField then
+			moveWithTimeout("go_to_field", actives["walkspeed"], targetField, function()
+				if isCurrent() then moveExact() end
+			end, 90, fail, isCurrent)
+		else
+			moveExact()
+		end
+	end
+
 	local function clearPuffState()
 		if puffId ~= farming.__puffId then return end
 		farming.puffActive = false
@@ -1249,25 +1315,32 @@ function farming.puffsrooms(...)
 
 		farming.__pendingPuff = nil
 		farming.__puffStartTime = tick()
-		moveWithTimeout("move", actives["walkspeed"], position, function()
-			if not isCurrent() then return end
+		moveToSpecialArea(function()
 			collectAtPosition()
-		end, 45, function(reason)
-			warn("[puffshroom] failed to return to dropped tokens:", reason)
+		end, "return to dropped tokens", function()
 			finishAfterTokens()
-		end, isCurrent)
+		end)
 	end
 
 	local function goConvertThenResume(hivePosition)
 		farming.__pendingPuff = shroom or { missing = true }
+		farming.__goingToHive = true
 		if movement.stop then pcall(movement.stop) end
 		moveWithTimeout("hive", actives["walkspeed"], hivePosition, function()
 			if puffId ~= farming.__puffId then return end
 			actives["move"] = false
-			convertAndWait(isCurrent, "puffshroom")
-			resumeAfterConversion()
+			local converted = convertAndWait(isCurrent, "puffshroom")
+			if converted then
+				resumeAfterConversion()
+			else
+				-- Keep the bot at the hive after failed conversion; never resume farming with a full backpack.
+				farming.__pendingPuff = nil
+				farming.puffActive = false
+				farming.__puffStartTime = nil
+			end
 		end, 60, function(reason)
 			warn("[puffshroom] movement to hive failed:", reason)
+			farming.__goingToHive = false
 			farming.__pendingPuff = nil
 			returnToField()
 		end, isCurrent)
@@ -1371,10 +1444,9 @@ function farming.puffsrooms(...)
 		end
 	end
 
-	moveWithTimeout("move", actives["walkspeed"], position, onArrived, 60, function(reason)
-		warn("[puffshroom] movement to mushroom/token area failed:", reason)
+	moveToSpecialArea(onArrived, lostPending and "movement to old token area" or "movement to Puffshroom", function()
 		returnToField()
-	end, isCurrent)
+	end)
 end
 
 function farming.farm(...)
@@ -1408,7 +1480,16 @@ function farming.farm(...)
 		table.clear(queue["auto_farm"])
 		table.clear(queue["tokens"])
 		farming.__forceFieldReturn = nil
+		farming.__goingToHive = false
+		if mod.convert then
+			mod.convert.__retryCount = 0
+			mod.convert.__retryScheduled = false
+			mod.convert.__failedAt = nil
+		end
 		actives.move = false
+		return
+	end
+	if farming.__goingToHive or actives["convert"] == true or (mod.convert and mod.convert.__running) then
 		return
 	end
 	if farmingActive then
@@ -1570,6 +1651,12 @@ function farming.farm(...)
 					break
 				end
 
+				if farming.__goingToHive or actives["convert"] == true or (mod.convert and mod.convert.__running) then
+					actives["move"] = false
+					task.wait(0.25)
+					continue
+				end
+
 				if (root.Position - lastRootPos).Magnitude < 0.5 then
 					stuckTicks += 1
 				else
@@ -1578,7 +1665,7 @@ function farming.farm(...)
 				lastRootPos = root.Position
 				
 				local quickInfo = mod.convert.get_pollen_info()
-				local quickThr = actives["backpack"] or 80
+				local quickThr = tonumber(actives["backpack"]) or 80
 				if quickInfo and quickInfo.percent >= quickThr and quickInfo.pollen > 0 then
 					local now = tick()
 					if mod.convert and mod.convert.__failedAt and (now - mod.convert.__failedAt) < 30 then
@@ -1593,7 +1680,6 @@ function farming.farm(...)
 						actives["move"] = false
 						farming.__goingToHive = true
 						movement.move("hive", actives["walkspeed"], quickHive, function()
-							farming.__goingToHive = false
 							task.wait(1)
 							mod.convert.convert()
 						end)
@@ -1901,12 +1987,12 @@ function farming.farm(...)
 				end
 
 				local info = mod.convert.get_pollen_info()
-				local threshold = actives["backpack"] or 80
+				local threshold = tonumber(actives["backpack"]) or 80
 				local intervalMinutes = tonumber(actives["convert_interval"]) or 15
 				local interval = intervalMinutes * 60
 
 				local byBackpack = info and info.percent >= threshold and info.pollen > 0
-				local byTime = (tick() - lastConvertTime) >= interval
+				local byTime = info and info.pollen > 0 and (tick() - lastConvertTime) >= interval
 
 				if byBackpack or byTime then
 					local now = tick()
@@ -1928,7 +2014,6 @@ function farming.farm(...)
 					actives["move"] = false
 					farming.__goingToHive = true
 					movement.move("hive", actives["walkspeed"], currentPos, function()
-						farming.__goingToHive = false
 						task.wait(1)
 						mod.convert.convert()
 					end)
@@ -2001,7 +2086,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(1111)
 
 task.spawn(function()
 	task.wait(2)
