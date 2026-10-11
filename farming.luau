@@ -801,10 +801,13 @@ function farming.sprout(...)
 	end
 
 	local function moveToSpecialArea(onReached, failureLabel, onFailure)
-		local targetField = getZone(position)
+		local targetFieldName = getZone(position)
+		local zones = workspace:FindFirstChild("FlowerZones")
+		local targetField = zones and targetFieldName and zones:FindFirstChild(targetFieldName)
+
 		local currentCharacter = find.player.Character
 		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-		local currentField = currentRoot and getZone(currentRoot.Position)
+		local currentFieldName = currentRoot and getZone(currentRoot.Position)
 
 		local function fail(reason)
 			warn("[sprout] " .. tostring(failureLabel or "special-area movement") .. " failed:", reason)
@@ -817,7 +820,7 @@ function farming.sprout(...)
 			end, 90, fail, isCurrent)
 		end
 
-		if targetField and currentField ~= targetField then
+		if targetField and currentFieldName ~= targetFieldName then
 			moveWithTimeout("go_to_field", actives["walkspeed"], targetField, function()
 				if isCurrent() then moveExact() end
 			end, 90, fail, isCurrent)
@@ -885,8 +888,9 @@ function farming.sprout(...)
 			farming.sproutActive = false
 			return
 		end
-
+		
 		farming.__pendingSprout = nil
+		farming.sproutActive = false
 		farming.__sproutStartTime = tick()
 		moveToSpecialArea(function()
 			collectAtPosition()
@@ -1166,13 +1170,16 @@ function farming.puffsrooms(...)
 	end
 
 	local function moveToSpecialArea(onReached, failureLabel, onFailure)
-		local targetField = getZone(position)
+		local targetFieldName = getZone(position)
+		local zones = workspace:FindFirstChild("FlowerZones")
+		local targetField = zones and targetFieldName and zones:FindFirstChild(targetFieldName)
+
 		local currentCharacter = find.player.Character
 		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-		local currentField = currentRoot and getZone(currentRoot.Position)
+		local currentFieldName = currentRoot and getZone(currentRoot.Position)
 
 		local function fail(reason)
-			warn("[puffshroom] " .. tostring(failureLabel or "special-area movement") .. " failed:", reason)
+			warn("[puff] " .. tostring(failureLabel or "special-area movement") .. " failed:", reason)
 			if onFailure then onFailure(reason) end
 		end
 
@@ -1182,7 +1189,7 @@ function farming.puffsrooms(...)
 			end, 90, fail, isCurrent)
 		end
 
-		if targetField and currentField ~= targetField then
+		if targetField and currentFieldName ~= targetFieldName then
 			moveWithTimeout("go_to_field", actives["walkspeed"], targetField, function()
 				if isCurrent() then moveExact() end
 			end, 90, fail, isCurrent)
@@ -1314,6 +1321,7 @@ function farming.puffsrooms(...)
 		end
 
 		farming.__pendingPuff = nil
+		farming.puffActive = false
 		farming.__puffStartTime = tick()
 		moveToSpecialArea(function()
 			collectAtPosition()
@@ -2116,7 +2124,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
