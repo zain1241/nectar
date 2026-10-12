@@ -1298,7 +1298,7 @@ function farming.puffsrooms(...)
 				local currentPosition = getPos(shroom)
 				return currentPosition or position
 			end,
-			12,
+			4,
 			isCurrent,
 			40,
 			2.5
@@ -2164,7 +2164,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123123123)
 
 task.spawn(function()
 	task.wait(2)
