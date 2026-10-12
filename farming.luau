@@ -881,11 +881,17 @@ function farming.sprout(...)
 		end
 
 		if sprout and sprout.Parent and actives["sprout"] == true then
-			-- The main farm loop will call farming.sprout(true) again and resume this object.
 			farming.__pendingSprout = sprout
 			farming.__sproutPosition = position
 			farming.__sproutStartTime = nil
 			farming.sproutActive = false
+			-- Перезапускаем metod, чтобы он подхватил __pendingSprout
+			if not farmingActive then
+				task.spawn(function()
+					task.wait(0.2)
+					farming.farm()
+				end)
+			end
 			return
 		end
 		
@@ -1308,11 +1314,16 @@ function farming.puffsrooms(...)
 		end
 
 		if shroom and shroom.Parent and actives["puffshrooms"] == true then
-			-- Resume the same mushroom after converting pollen; don't start a second farm loop.
 			farming.__pendingPuff = shroom
 			farming.__puffPosition = position
 			farming.__puffStartTime = nil
 			farming.puffActive = false
+			if not farmingActive then
+				task.spawn(function()
+					task.wait(0.2)
+					farming.farm()
+				end)
+			end
 			return
 		end
 
@@ -2091,6 +2102,13 @@ function farming.farm(...)
 		end
 		return
 	end
+	
+	if farming.__pendingPuff and farming.__pendingPuff.Parent then
+		if not farmingActive then
+			task.spawn(metod)
+		end
+		return
+	end
 
 	if hivePos ~= nil or hiveId ~= nil then
 		if not field then
@@ -2146,7 +2164,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
@@ -2225,8 +2243,17 @@ end
 farming.resetCharacterState = resetCharacterState
 
 task.spawn(function()
+	local cycle = 0
 	while true do
 		task.wait(5)
+		cycle += 1
+
+		-- Раз в 5 минут (60 циклов) чистим skip-таблицы
+		if cycle % 60 == 0 then
+			if farming.__sproutSkipUntil then table.clear(farming.__sproutSkipUntil) end
+			if farming.__puffSkipUntil then table.clear(farming.__puffSkipUntil) end
+		end
+
 		local staleHiveLock = farming.__goingToHive == true
 			and actives["convert"] ~= true
 			and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled))
@@ -2254,8 +2281,13 @@ task.spawn(function()
 					local moved = (root.Position - farming.__watchdogPos).Magnitude
 					if moved < 3 then
 						farming.__watchdogStuck = (farming.__watchdogStuck or 0) + 1
-						if farming.__watchdogStuck >= 4 then -- 4 * 5s = 20s без движения
+						if farming.__watchdogStuck >= 4 then
 							warn("[farming] watchdog: bot stuck for 20s, restarting farm")
+							warn("[watchdog-state] running=", farmingActive,
+								"sprout=", farming.sproutActive,
+								"puff=", farming.puffActive,
+								"pendingS=", farming.__pendingSprout ~= nil,
+								"pendingP=", farming.__pendingPuff ~= nil)
 							farming.__watchdogStuck = 0
 							farming.__watchdogPos = nil
 							if farming.farm then farming.farm() end
