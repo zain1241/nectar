@@ -32,6 +32,17 @@ local function getFarmingModule()
 	return modules and modules.farming or nil
 end
 
+-- Shared lock used by convert.lua and farming.lua. The executor environment
+-- survives even if the loader temporarily exposes different module-table refs.
+local function setBalloonWaitLock(value)
+	local waiting = value == true
+	env.__NECTAR_BALLOON_WAITING = waiting
+	local farmModule = getFarmingModule()
+	if farmModule then
+		farmModule.__waitingForBalloon = waiting
+	end
+end
+
 local function hasPendingSpecial()
 	local farmModule = getFarmingModule()
 	if not farmModule then return false end
@@ -482,8 +493,6 @@ function convert.convert(...)
 			if pos then
 				local dx, dz = pos.X - hivePos.X, pos.Z - hivePos.Z
 				local horizontalDistance = math.sqrt(dx * dx + dz * dz)
-				warn(("[balloon-debug] candidate=%s class=%s root=%s horizontalDistance=%.1f"):format(
-					obj:GetFullName(), obj.ClassName, root and root.Name or "none", horizontalDistance))
 				if horizontalDistance <= 20 then
 					return true
 				end
@@ -512,7 +521,6 @@ function convert.convert(...)
 			if pos then
 				local dx, dz = pos.X - pp.X, pos.Z - pp.Z
 				local horiz = math.sqrt(dx * dx + dz * dz)
-				warn(("[balloon-debug] %s class=%s horiz=%.1f y=%.1f"):format(obj:GetFullName(), obj.ClassName, horiz, pos.Y - pp.Y))
 				if horiz <= radius then return true end
 			end
 		end
@@ -538,36 +546,7 @@ function convert.convert(...)
 		end
 
 		if not seen then
-			warn("[balloon] NOT found within " .. appearWait .. "s; diagnostic follows")
-			local balloons = workspace:FindFirstChild("Balloons")
-			local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
-			local hive = getMyHive()
-			local spawnPos = hive and hive:FindFirstChild("SpawnPos", true)
-			local hivePos = getInstancePosition(spawnPos)
-			warn("[balloon-debug] folder=", hiveBalloons and hiveBalloons:GetFullName() or "MISSING",
-				"hive=", hive and hive:GetFullName() or "MISSING",
-				"spawnPos=", spawnPos and spawnPos.ClassName or "MISSING",
-				"hivePos=", hivePos and tostring(hivePos) or "MISSING")
-			if hiveBalloons then
-				local count = 0
-				for _, obj in ipairs(hiveBalloons:GetChildren()) do
-					local rootPart, bodyPart = getBalloonParts(obj)
-					local pos = rootPart and rootPart.Position or (bodyPart and bodyPart.Position)
-					if pos then
-						local distance = "unknown"
-						if hivePos then
-							local dx, dz = pos.X - hivePos.X, pos.Z - hivePos.Z
-							distance = string.format("%.1f", math.sqrt(dx * dx + dz * dz))
-						end
-						warn("[balloon-debug] container=", obj:GetFullName(), "class=", obj.ClassName,
-							"root=", rootPart and rootPart:GetFullName() or "none",
-							"body=", bodyPart and bodyPart:GetFullName() or "none",
-							"pos=", tostring(pos), "horizontalDistance=", distance)
-						count += 1
-					end
-				end
-				warn("[balloon-debug] containers with BalloonRoot/BalloonBody=", count)
-			end
+			warn("[balloon] NOT found within " .. appearWait .. "s")
 			return false
 		end
 
@@ -617,8 +596,8 @@ function convert.convert(...)
 			-- Lock AutoFarm before yielding: otherwise the watchdog sees the player
 			-- standing at the hive and starts a competing route back to the field.
 			local shouldWaitForBalloon = actives["balloon"] == true and not hasPendingSpecial()
+			setBalloonWaitLock(shouldWaitForBalloon)
 			if farmModule then
-				farmModule.__waitingForBalloon = shouldWaitForBalloon
 				if shouldWaitForBalloon then
 					-- Invalidate any stale field-route callback from before conversion.
 					farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
@@ -633,7 +612,7 @@ function convert.convert(...)
 					task.wait(0.25)
 					if not currentJob() or actives["auto_farm"] ~= true then
 						farmModule = getFarmingModule()
-						if farmModule then farmModule.__waitingForBalloon = false end
+						setBalloonWaitLock(false)
 						setGoingToHive(false)
 						return
 					end
@@ -662,7 +641,7 @@ function convert.convert(...)
 							if actives["balloon"] == true then
 								-- Re-assert the lock in case a special-event state changed during the defer.
 								if farmModule.__waitingForBalloon ~= true then
-									farmModule.__waitingForBalloon = true
+									setBalloonWaitLock(true)
 									farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
 									farmModule.__fieldRouteInProgress = false
 									if movement.stop then pcall(movement.stop) end
@@ -671,8 +650,8 @@ function convert.convert(...)
 								waitForBalloonToDisappear(300, 4)
 							end
 						end
-						-- Always release the lock when the wait ends or is cancelled.
-						if farmModule then farmModule.__waitingForBalloon = false end
+						-- Always release both locks when the wait ends or is cancelled.
+						setBalloonWaitLock(false)
 						setGoingToHive(false)
 						if currentJob() and actives["auto_farm"] == true
 							and farmModule and type(farmModule.farm) == "function" then
@@ -682,12 +661,12 @@ function convert.convert(...)
 							farmModule.farm()
 						end
 					else
-						if farmModule then farmModule.__waitingForBalloon = false end
+						setBalloonWaitLock(false)
 						setGoingToHive(false)
 					end
 				end)
 			else
-				if farmModule then farmModule.__waitingForBalloon = false end
+				setBalloonWaitLock(false)
 			end
 			
 				-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
@@ -900,7 +879,7 @@ function convert.convert(...)
 
 	return true
 end
-print(123123)
+print(1111)
 
 function convert.equip_mask(name)
 	--print(2)
