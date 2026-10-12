@@ -370,7 +370,7 @@ function convert.convert(...)
 
 		return nil
 	end
-
+	
 	-- Проверяем есть ли сейчас hive-шарик (тот что появляется при конвертации)
 	--local function hasHiveBalloon()
 	--	local balloons = workspace:FindFirstChild("Balloons")
@@ -392,7 +392,7 @@ function convert.convert(...)
 	--	end
 	--	return false
 	--end
-
+	
 	-- Находит свой улей (по Owner)
 	local function getMyHive()
 		local honeycombs = workspace:FindFirstChild("Honeycombs")
@@ -411,50 +411,81 @@ function convert.convert(...)
 		return nil
 	end
 
-	-- Проверяет шарик рядом с МОИМ ульем (не рядом с игроком!)
+	-- В игровом файле HiveBalloonInstance имеет класс Folder, а не Model.
+	-- Поэтому ищем BalloonRoot/BalloonBody внутри каждого контейнера независимо от его класса.
+	local function getBalloonParts(obj)
+		if not obj then return nil, nil end
+
+		local root
+		if obj:IsA("BasePart") and obj.Name == "BalloonRoot" then
+			root = obj
+		else
+			root = obj:FindFirstChild("BalloonRoot", true)
+		end
+
+		local body
+		if obj:IsA("BasePart") and obj.Name == "BalloonBody" then
+			body = obj
+		else
+			body = obj:FindFirstChild("BalloonBody", true)
+		end
+
+		if root and not root:IsA("BasePart") then root = nil end
+		if body and not body:IsA("BasePart") then body = nil end
+		return root, body
+	end
+
+	local function getInstancePosition(obj)
+		if not obj then return nil end
+		if obj:IsA("BasePart") then
+			return obj.Position
+		elseif obj:IsA("Attachment") then
+			return obj.WorldPosition
+		elseif obj:IsA("Vector3Value") then
+			return obj.Value
+		elseif obj:IsA("CFrameValue") then
+			return obj.Value.Position
+		elseif obj:IsA("ObjectValue") and obj.Value then
+			return getInstancePosition(obj.Value)
+		end
+
+		-- A HiveBalloonInstance in the supplied .rbxl is a Folder containing
+		-- BalloonRoot and BalloonBody, so Model-only pivot lookup misses it.
+		local root, body = getBalloonParts(obj)
+		if root then return root.Position end
+		if body then return body.Position end
+
+		if obj:IsA("Model") then
+			local ok, pivot = pcall(function() return obj:GetPivot() end)
+			if ok then return pivot.Position end
+		end
+		return nil
+	end
+
+	-- Проверяем контейнеры в Workspace.Balloons.HiveBalloons и ищем BalloonRoot
+	-- внутри Folder/Model. BalloonRoot находится у основания шарика над ульем.
 	local function hasHiveBalloon()
 		local balloons = workspace:FindFirstChild("Balloons")
-		if not balloons then return false end
-		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+		local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
 		local hive = getMyHive()
-		if not hive then
-			-- без своего улья — считаем по любому
-			for _, obj in ipairs(hiveBalloons:GetChildren()) do
-				if obj:IsA("Model") or obj:IsA("BasePart") then return true end
-			end
-			return false
-		end
+		if not hive then return false end
 
-		local spawnPos = hive:FindFirstChild("SpawnPos")
-		local hivePos
-		if spawnPos then
-			if spawnPos:IsA("BasePart") then hivePos = spawnPos.Position
-			elseif spawnPos:IsA("Vector3Value") then hivePos = spawnPos.Value
-			elseif spawnPos:IsA("CFrameValue") then hivePos = spawnPos.Value.Position
-			elseif spawnPos:IsA("Attachment") then hivePos = spawnPos.WorldPosition
-			end
-		end
+		local spawnPos = hive:FindFirstChild("SpawnPos", true)
+		local hivePos = getInstancePosition(spawnPos)
 		if not hivePos then return false end
 
 		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			if obj:IsA("Model") or obj:IsA("BasePart") then
-				local pos
-				if obj:IsA("Model") then
-					local root = obj:FindFirstChild("BalloonRoot") or obj.PrimaryPart
-					if not root then root = obj:FindFirstChildWhichIsA("BasePart", true) end
-					pos = root and root.Position
-				else
-					pos = obj.Position
-				end
-				if pos then
-					-- BalloonRoot may be high above the hive; compare XZ only.
-					local dx = pos.X - hivePos.X
-					local dz = pos.Z - hivePos.Z
-					if math.sqrt(dx * dx + dz * dz) <= 20 then
-						return true
-					end
+			local root, body = getBalloonParts(obj)
+			local pos = root and root.Position or (body and body.Position)
+			if pos then
+				local dx, dz = pos.X - hivePos.X, pos.Z - hivePos.Z
+				local horizontalDistance = math.sqrt(dx * dx + dz * dz)
+				warn(("[balloon-debug] candidate=%s class=%s root=%s horizontalDistance=%.1f"):format(
+					obj:GetFullName(), obj.ClassName, root and root.Name or "none", horizontalDistance))
+				if horizontalDistance <= 20 then
+					return true
 				end
 			end
 		end
@@ -470,28 +501,19 @@ function convert.convert(...)
 		if not root then return false end
 
 		local balloons = workspace:FindFirstChild("Balloons")
-		if not balloons then return false end
-		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+		local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
 		local pp = root.Position
 		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			if obj:IsA("Model") or obj:IsA("BasePart") then
-				local pos
-				if obj:IsA("Model") then
-					local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-					pos = part and part.Position
-				else
-					pos = obj.Position
-				end
-				-- Внутри for _, obj:
-				if pos then
-					local dx = pos.X - pp.X
-					local dz = pos.Z - pp.Z
-					local horiz = math.sqrt(dx*dx + dz*dz)
-					warn(("[balloon-debug] %s horiz=%.1f y=%.1f"):format(obj.Name, horiz, pos.Y - pp.Y))
-					if horiz <= radius then return true end
-				end
+			local balloonRoot, balloonBody = getBalloonParts(obj)
+			local pos = balloonRoot and balloonRoot.Position or (balloonBody and balloonBody.Position)
+			if not pos and obj:IsA("BasePart") then pos = obj.Position end
+			if pos then
+				local dx, dz = pos.X - pp.X, pos.Z - pp.Z
+				local horiz = math.sqrt(dx * dx + dz * dz)
+				warn(("[balloon-debug] %s class=%s horiz=%.1f y=%.1f"):format(obj:GetFullName(), obj.ClassName, horiz, pos.Y - pp.Y))
+				if horiz <= radius then return true end
 			end
 		end
 		return false
@@ -516,7 +538,36 @@ function convert.convert(...)
 		end
 
 		if not seen then
-			print("[balloon] NOT found within " .. appearWait .. "s")
+			warn("[balloon] NOT found within " .. appearWait .. "s; diagnostic follows")
+			local balloons = workspace:FindFirstChild("Balloons")
+			local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
+			local hive = getMyHive()
+			local spawnPos = hive and hive:FindFirstChild("SpawnPos", true)
+			local hivePos = getInstancePosition(spawnPos)
+			warn("[balloon-debug] folder=", hiveBalloons and hiveBalloons:GetFullName() or "MISSING",
+				"hive=", hive and hive:GetFullName() or "MISSING",
+				"spawnPos=", spawnPos and spawnPos.ClassName or "MISSING",
+				"hivePos=", hivePos and tostring(hivePos) or "MISSING")
+			if hiveBalloons then
+				local count = 0
+				for _, obj in ipairs(hiveBalloons:GetChildren()) do
+					local rootPart, bodyPart = getBalloonParts(obj)
+					local pos = rootPart and rootPart.Position or (bodyPart and bodyPart.Position)
+					if pos then
+						local distance = "unknown"
+						if hivePos then
+							local dx, dz = pos.X - hivePos.X, pos.Z - hivePos.Z
+							distance = string.format("%.1f", math.sqrt(dx * dx + dz * dz))
+						end
+						warn("[balloon-debug] container=", obj:GetFullName(), "class=", obj.ClassName,
+							"root=", rootPart and rootPart:GetFullName() or "none",
+							"body=", bodyPart and bodyPart:GetFullName() or "none",
+							"pos=", tostring(pos), "horizontalDistance=", distance)
+						count += 1
+					end
+				end
+				warn("[balloon-debug] containers with BalloonRoot/BalloonBody=", count)
+			end
 			return false
 		end
 
@@ -604,7 +655,7 @@ function convert.convert(...)
 					--		farmModule.farm()
 					--	end
 					--end
-
+					
 					if not hasPendingSpecial() then
 						farmModule = getFarmingModule()
 						if farmModule and type(farmModule.farm) == "function" then
@@ -638,28 +689,28 @@ function convert.convert(...)
 			else
 				if farmModule then farmModule.__waitingForBalloon = false end
 			end
+			
+				-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
+				-- "висит" на улье (pollen=0, но идёт движение к полю), принудительно запускаем farm().
+				--task.delay(8, function()
+				--	if convert.__jobId ~= jobId then return end
+				--	if actives["auto_farm"] ~= true then return end
 
-			-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
-			-- "висит" на улье (pollen=0, но идёт движение к полю), принудительно запускаем farm().
-			--task.delay(8, function()
-			--	if convert.__jobId ~= jobId then return end
-			--	if actives["auto_farm"] ~= true then return end
+				--	local fm = getFarmingModule()
+				--	if not fm then return end
 
-			--	local fm = getFarmingModule()
-			--	if not fm then return end
+				--	local info = convert.get_pollen_info()
+				--	if info and info.pollen > 0 then return end
 
-			--	local info = convert.get_pollen_info()
-			--	if info and info.pollen > 0 then return end
-
-			--	if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
-			--		warn("[convert] safety net: bot stuck after conversion, forcing farm()")
-			--		fm.__goingToHive = false
-			--		fm.__fieldRouteInProgress = false
-			--		fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
-			--		if type(fm.farm) == "function" then
-			--			fm.farm()
-			--		end
-			--	end
+				--	if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
+				--		warn("[convert] safety net: bot stuck after conversion, forcing farm()")
+				--		fm.__goingToHive = false
+				--		fm.__fieldRouteInProgress = false
+				--		fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
+				--		if type(fm.farm) == "function" then
+				--			fm.farm()
+				--		end
+				--	end
 			return
 		end
 
@@ -798,7 +849,7 @@ function convert.convert(...)
 			return false
 		end
 	end
-
+	
 	-- Начинаем следить за шариком с самого старта конвертации.
 	-- Он может появиться в любой момент, не только после pollen=0.
 	convert.__sawBalloonDuringConvert = false
@@ -849,7 +900,7 @@ function convert.convert(...)
 
 	return true
 end
-print(123123123123)
+print(123123)
 
 function convert.equip_mask(name)
 	--print(2)
