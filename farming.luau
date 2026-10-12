@@ -894,7 +894,7 @@ function farming.sprout(...)
 			end
 			return
 		end
-		
+
 		farming.__pendingSprout = nil
 		farming.sproutActive = false
 		farming.__sproutStartTime = tick()
@@ -1463,14 +1463,20 @@ end
 function farming.farm(...)
 	local status = actives.auto_farm
 	local walkspeed = actives.walkspeed
-	
+
+	-- Conversion owns the character while a hive balloon is being collected.
+	-- Do not let any queued farm() call start a competing field route.
+	if status == true and farming.__waitingForBalloon == true then
+		return
+	end
+
 	if farming.__goingToHive
 		and actives["convert"] ~= true
 		and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
 		warn("[farming] stale __goingToHive detected, resetting to false")
 		farming.__goingToHive = false
 	end
-	
+
 	warn("[farm-call] goingToHive=", farming.__goingToHive,
 		"convert=", actives["convert"],
 		"running=", mod.convert and mod.convert.__running,
@@ -1479,6 +1485,7 @@ function farming.farm(...)
 		"fieldRoute=", farming.__fieldRouteInProgress)
 
 	if not status then
+		farming.__waitingForBalloon = false
 		-- Invalidate any pending return-to-field movement when AutoFarm is disabled.
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -1523,7 +1530,7 @@ function farming.farm(...)
 	if farmingActive then
 		return
 	end
-	
+
 	if not actives["sprout"]
 		and (farming.__pendingSprout or farming.sproutActive or farming.__sproutOrigField) then
 		farming.sproutActive = false
@@ -2102,7 +2109,7 @@ function farming.farm(...)
 		end
 		return
 	end
-	
+
 	if farming.__pendingPuff and farming.__pendingPuff.Parent then
 		if not farmingActive then
 			task.spawn(metod)
@@ -2164,7 +2171,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
@@ -2200,6 +2207,7 @@ local function respawn(...)
 		farming.__puffWaiting = nil
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
+		farming.__waitingForBalloon = false
 		farming.__forceFieldReturn = nil
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -2266,6 +2274,7 @@ task.spawn(function()
 		local should_check = actives["auto_farm"] == true
 			and not farmingActive
 			and not farming.__goingToHive
+			and not farming.__waitingForBalloon
 			and not farming.__fieldRouteInProgress
 			and not actives["convert"]
 
