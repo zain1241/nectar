@@ -409,11 +409,19 @@ function convert.convert(...)
 	end
 
 	local function waitForHiveBalloon(maxWait)
+		-- Фаза 1: ждём ПОЯВЛЕНИЯ (до 5 сек)
+		local appearDeadline = tick() + 5
+		local appeared = false
+		while tick() < appearDeadline do
+			if hasHiveBalloon() then appeared = true; break end
+			task.wait(0.1)
+		end
+		if not appeared then return true end  -- не появился — не ждём
+
+		-- Фаза 2: ждём ИСЧЕЗНОВЕНИЯ
 		local t0 = tick()
 		while tick() - t0 < maxWait do
-			if not hasHiveBalloon() then
-				return true
-			end
+			if not hasHiveBalloon() then return true end
 			task.wait(0.25)
 		end
 		return false
@@ -476,7 +484,7 @@ function convert.convert(...)
 							local wantBalloon = actives["balloon"] == true or actives["bubble"] == true
 							if wantBalloon and hasHiveBalloon() then
 								warn("[convert] waiting for hive balloon to pop...")
-								waitForHiveBalloon(300)
+								waitForHiveBalloon(30)
 								warn("[convert] hive balloon gone, resuming farm")
 							end
 							farmModule.farm()
@@ -496,7 +504,7 @@ function convert.convert(...)
 					local info = convert.get_pollen_info()
 					if info and info.pollen > 0 then return end
 
-					if fm.__goingToHive or fm.__fieldRouteInProgress and not hasHiveBalloon() then
+					if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
 						warn("[convert] safety net: bot stuck after conversion, forcing farm()")
 						fm.__goingToHive = false
 						fm.__fieldRouteInProgress = false
@@ -682,7 +690,7 @@ function convert.convert(...)
 
 	return true
 end
-print(4444)
+print(123123)
 
 function convert.equip_mask(name)
 	--print(2)
