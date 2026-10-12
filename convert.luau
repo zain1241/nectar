@@ -400,9 +400,9 @@ function convert.convert(...)
 		if not hiveBalloons then return false end
 
 		local children = hiveBalloons:GetChildren()
-		if #children > 0 then
-		    warn("[balloon-check] found", #children, "items:", children[1].Name)
-		end
+		--if #children > 0 then
+		--    warn("[balloon-check] found", #children, "items:", children[1].Name)
+		--end
 
 		for _, obj in ipairs(children) do
 			if obj:IsA("Model") or obj:IsA("BasePart") then
@@ -412,29 +412,59 @@ function convert.convert(...)
 		return false
 	end
 
-	local function waitForHiveBalloon(maxWait)
-		-- Фаза 1: ждём появления (до 8 сек), если его ещё нет
-		local appearDeadline = tick() + 8
-		while tick() < appearDeadline do
-			if hasHiveBalloon() then
-				break
+	-- Проверяем, есть ли шарик в радиусе 30 studs от игрока
+	local function hasBalloonNearPlayer(radius)
+		radius = tonumber(radius) or 30
+
+		local character = find.player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if not root then return false end
+
+		local balloons = workspace:FindFirstChild("Balloons")
+		if not balloons then return false end
+		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+		if not hiveBalloons then return false end
+
+		local playerPos = root.Position
+		for _, obj in ipairs(hiveBalloons:GetChildren()) do
+			if obj:IsA("Model") or obj:IsA("BasePart") then
+				local pos
+				if obj:IsA("Model") then
+					local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+					pos = part and part.Position
+				else
+					pos = obj.Position
+				end
+				if pos and (pos - playerPos).Magnitude <= radius then
+					return true
+				end
+			end
+		end
+		return false
+	end
+
+	-- Ждём пока шарик пропадёт (в радиусе 30 от игрока).
+	-- Если шарика нет — выходим сразу.
+	local function waitForBalloonToDisappear(maxWait)
+		maxWait = tonumber(maxWait) or 60
+
+		-- Если шарика нет рядом — не ждём
+		if not hasBalloonNearPlayer(30) then
+			return false
+		end
+
+		warn("[convert] balloon detected nearby, waiting for it to disappear...")
+		local start = tick()
+
+		while tick() - start < maxWait do
+			if not hasBalloonNearPlayer(30) then
+				print(("convert balloon gone at %.1fs, resuming"):format(tick() - start))
+				return true
 			end
 			task.wait(0.15)
 		end
 
-		-- Если шарик всё ещё не появился — выходим
-		if not hasHiveBalloon() then
-			return false
-		end
-
-		-- Фаза 2: ждём исчезновения
-		local t0 = tick()
-		while tick() - t0 < maxWait do
-			if not hasHiveBalloon() then
-				return true
-			end
-			task.wait(0.25)
-		end
+		warn(("[convert] balloon still here after %ds, resuming anyway"):format(maxWait))
 		return false
 	end
 
@@ -492,16 +522,9 @@ function convert.convert(...)
 					if not hasPendingSpecial() then
 						farmModule = getFarmingModule()
 						if farmModule and type(farmModule.farm) == "function" then
-							local wantBalloon = actives["balloon"] == true or actives["bubble"] == true
-
-							if wantBalloon then
-								warn("[convert] balloon wait enabled, checking...")
-								local resolved = waitForHiveBalloon(300)
-								if resolved then
-									warn("[convert] balloon resolved, resuming farm")
-								else
-									warn("[convert] balloon wait timed out, resuming farm anyway")
-								end
+							-- Ждём шарик только если включён Balloon и шарик реально рядом с игроком
+							if actives["balloon"] == true then
+								waitForBalloonToDisappear(300)
 							end
 							farmModule.farm()
 						end
@@ -510,26 +533,25 @@ function convert.convert(...)
 				
 				-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
 				-- "висит" на улье (pollen=0, но идёт движение к полю), принудительно запускаем farm().
-				task.delay(8, function()
-					if convert.__jobId ~= jobId then return end
-					if actives["auto_farm"] ~= true then return end
+				--task.delay(8, function()
+				--	if convert.__jobId ~= jobId then return end
+				--	if actives["auto_farm"] ~= true then return end
 
-					local fm = getFarmingModule()
-					if not fm then return end
+				--	local fm = getFarmingModule()
+				--	if not fm then return end
 
-					local info = convert.get_pollen_info()
-					if info and info.pollen > 0 then return end
+				--	local info = convert.get_pollen_info()
+				--	if info and info.pollen > 0 then return end
 
-					if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
-						warn("[convert] safety net: bot stuck after conversion, forcing farm()")
-						fm.__goingToHive = false
-						fm.__fieldRouteInProgress = false
-						fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
-						if type(fm.farm) == "function" then
-							fm.farm()
-						end
-					end
-				end)
+				--	if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
+				--		warn("[convert] safety net: bot stuck after conversion, forcing farm()")
+				--		fm.__goingToHive = false
+				--		fm.__fieldRouteInProgress = false
+				--		fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
+				--		if type(fm.farm) == "function" then
+				--			fm.farm()
+				--		end
+				--	end
 			end
 			return
 		end
@@ -720,7 +742,7 @@ function convert.convert(...)
 
 	return true
 end
-print(4444)
+print(123123123123)
 
 function convert.equip_mask(name)
 	--print(2)
