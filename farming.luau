@@ -32,6 +32,14 @@ local queue = {
 	tokens = {},
 }
 
+-- Read the environment-wide lock as well as the module-local flag so a stale
+-- module reference cannot let the watchdog or a queued farm() call interrupt
+-- balloon waiting.
+local function isBalloonWaitActive()
+	return rawget(env, "__NECTAR_BALLOON_WAITING") == true
+		or farming.__waitingForBalloon == true
+end
+
 local function resetCharacterState()
 	local character = find.player.Character
 	if not character then
@@ -1466,7 +1474,7 @@ function farming.farm(...)
 
 	-- Conversion owns the character while a hive balloon is being collected.
 	-- Do not let any queued farm() call start a competing field route.
-	if status == true and farming.__waitingForBalloon == true then
+	if status == true and isBalloonWaitActive() then
 		return
 	end
 	
@@ -1477,15 +1485,10 @@ function farming.farm(...)
 		farming.__goingToHive = false
 	end
 	
-	warn("[farm-call] goingToHive=", farming.__goingToHive,
-		"convert=", actives["convert"],
-		"running=", mod.convert and mod.convert.__running,
-		"retrySched=", mod.convert and mod.convert.__retryScheduled,
-		"farmingActive=", farmingActive,
-		"fieldRoute=", farming.__fieldRouteInProgress)
 
 	if not status then
 		farming.__waitingForBalloon = false
+		env.__NECTAR_BALLOON_WAITING = false
 		-- Invalidate any pending return-to-field movement when AutoFarm is disabled.
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -1702,7 +1705,7 @@ function farming.farm(...)
 					break
 				end
 
-				if farming.__goingToHive or farming.__waitingForBalloon == true or actives["convert"] == true or (mod.convert and mod.convert.__running) then
+				if farming.__goingToHive or isBalloonWaitActive() or actives["convert"] == true or (mod.convert and mod.convert.__running) then
 					actives["move"] = false
 					task.wait(0.25)
 					continue
@@ -2171,7 +2174,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(1111)
 
 task.spawn(function()
 	task.wait(2)
@@ -2208,6 +2211,7 @@ local function respawn(...)
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
 		farming.__waitingForBalloon = false
+		env.__NECTAR_BALLOON_WAITING = false
 		farming.__forceFieldReturn = nil
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -2274,7 +2278,7 @@ task.spawn(function()
 		local should_check = actives["auto_farm"] == true
 			and not farmingActive
 			and not farming.__goingToHive
-			and not farming.__waitingForBalloon
+			and not isBalloonWaitActive()
 			and not farming.__fieldRouteInProgress
 			and not actives["convert"]
 
@@ -2292,11 +2296,6 @@ task.spawn(function()
 						farming.__watchdogStuck = (farming.__watchdogStuck or 0) + 1
 						if farming.__watchdogStuck >= 4 then
 							warn("[farming] watchdog: bot stuck for 20s, restarting farm")
-							warn("[watchdog-state] running=", farmingActive,
-								"sprout=", farming.sproutActive,
-								"puff=", farming.puffActive,
-								"pendingS=", farming.__pendingSprout ~= nil,
-								"pendingP=", farming.__pendingPuff ~= nil)
 							farming.__watchdogStuck = 0
 							farming.__watchdogPos = nil
 							if farming.farm then farming.farm() end
