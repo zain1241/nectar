@@ -393,20 +393,64 @@ function convert.convert(...)
 	--	return false
 	--end
 	
+	-- Находит свой улей (по Owner)
+	local function getMyHive()
+		local honeycombs = workspace:FindFirstChild("Honeycombs")
+		if not honeycombs then return nil end
+
+		local player = find.player
+		for _, hive in ipairs(honeycombs:GetChildren()) do
+			local owner = hive:FindFirstChild("Owner")
+			if owner then
+				local v = owner.Value
+				if v == player or v == player.Name then
+					return hive
+				end
+			end
+		end
+		return nil
+	end
+
+	-- Проверяет шарик рядом с МОИМ ульем (не рядом с игроком!)
 	local function hasHiveBalloon()
 		local balloons = workspace:FindFirstChild("Balloons")
 		if not balloons then return false end
 		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
-		local children = hiveBalloons:GetChildren()
-		--if #children > 0 then
-		--    warn("[balloon-check] found", #children, "items:", children[1].Name)
-		--end
+		local hive = getMyHive()
+		if not hive then
+			-- без своего улья — считаем по любому
+			for _, obj in ipairs(hiveBalloons:GetChildren()) do
+				if obj:IsA("Model") or obj:IsA("BasePart") then return true end
+			end
+			return false
+		end
 
-		for _, obj in ipairs(children) do
+		local spawnPos = hive:FindFirstChild("SpawnPos")
+		local hivePos
+		if spawnPos then
+			if spawnPos:IsA("BasePart") then hivePos = spawnPos.Position
+			elseif spawnPos:IsA("Vector3Value") then hivePos = spawnPos.Value
+			elseif spawnPos:IsA("CFrameValue") then hivePos = spawnPos.Value.Position
+			elseif spawnPos:IsA("Attachment") then hivePos = spawnPos.WorldPosition
+			end
+		end
+		if not hivePos then return false end
+
+		for _, obj in ipairs(hiveBalloons:GetChildren()) do
 			if obj:IsA("Model") or obj:IsA("BasePart") then
-				return true
+				local pos
+				if obj:IsA("Model") then
+					local root = obj:FindFirstChild("BalloonRoot") or obj.PrimaryPart
+					if not root then root = obj:FindFirstChildWhichIsA("BasePart", true) end
+					pos = root and root.Position
+				else
+					pos = obj.Position
+				end
+				if pos and (pos - hivePos).Magnitude <= 20 then
+					return true
+				end
 			end
 		end
 		return false
@@ -450,39 +494,34 @@ function convert.convert(...)
 
 	-- Ждём появления + исчезновения
 	local function waitForBalloonToDisappear(maxWait, appearWait)
-		maxWait   = tonumber(maxWait)   or 60
-		appearWait = tonumber(appearWait) or 10
+		maxWait    = tonumber(maxWait)    or 60
+		appearWait = tonumber(appearWait) or 60
 
-		-- Фаза 1: ждём появления (шарик спавнится с задержкой)
-		local seen = hasBalloonNearPlayer(30)
+		local seen = hasHiveBalloon()
 		if not seen then
-			warn("[balloon] waiting for appear (max " .. appearWait .. "s)...")
+			print("[balloon] waiting for appear (max " .. appearWait .. "s)...")
 			local appearDeadline = tick() + appearWait
 			while tick() < appearDeadline do
-				if hasBalloonNearPlayer(30) then
-					seen = true
-					break
-				end
-				task.wait(0.15)
+				if hasHiveBalloon() then seen = true break end
+				task.wait(0.2)
 			end
 		end
 
 		if not seen then
-			warn("[balloon] NOT found within " .. appearWait .. "s, skipping wait")
+			print("[balloon] NOT found within " .. appearWait .. "s")
 			return false
 		end
 
-		-- Фаза 2: ждём исчезновения
-		warn("[balloon] detected, waiting for disappear (max " .. maxWait .. "s)...")
+		print("[balloon] detected, waiting for disappear (max " .. maxWait .. "s)...")
 		local start = tick()
 		while tick() - start < maxWait do
-			if not hasBalloonNearPlayer(30) then
-				warn(("[balloon] gone after %.1fs"):format(tick() - start))
+			if not hasHiveBalloon() then
+				print(("[balloon] gone after %.1fs"):format(tick() - start))
 				return true
 			end
-			task.wait(0.15)
+			task.wait(0.2)
 		end
-		warn(("[balloon] still here after %ds, giving up"):format(maxWait))
+		print(("[balloon] still here after %ds"):format(maxWait))
 		return false
 	end
 
@@ -542,7 +581,7 @@ function convert.convert(...)
 						if farmModule and type(farmModule.farm) == "function" then
 							-- Ждём шарик только если включён Balloon и шарик реально рядом с игроком
 							if actives["balloon"] == true then
-								waitForBalloonToDisappear(300, 10)   -- 60 сек ждём исчезновения, 8 сек появления
+								waitForBalloonToDisappear(300, 60)
 							end
 							farmModule.farm()
 						end
@@ -760,7 +799,7 @@ function convert.convert(...)
 
 	return true
 end
-print(1111)
+print(4444)
 
 function convert.equip_mask(name)
 	--print(2)
