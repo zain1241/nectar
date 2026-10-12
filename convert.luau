@@ -476,7 +476,7 @@ function convert.convert(...)
 							local wantBalloon = actives["balloon"] == true or actives["bubble"] == true
 							if wantBalloon and hasHiveBalloon() then
 								warn("[convert] waiting for hive balloon to pop...")
-								waitForHiveBalloon(30)
+								waitForHiveBalloon(300)
 								warn("[convert] hive balloon gone, resuming farm")
 							end
 							farmModule.farm()
