@@ -412,7 +412,7 @@ function convert.convert(...)
 		return false
 	end
 
-	-- Проверяем, есть ли шарик в радиусе 30 studs от игрока
+	-- Горизонтальная дистанция (без Y) — шарик висит высоко над ульем
 	local function hasBalloonNearPlayer(radius)
 		radius = tonumber(radius) or 30
 
@@ -425,7 +425,7 @@ function convert.convert(...)
 		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
-		local playerPos = root.Position
+		local pp = root.Position
 		for _, obj in ipairs(hiveBalloons:GetChildren()) do
 			if obj:IsA("Model") or obj:IsA("BasePart") then
 				local pos
@@ -435,36 +435,54 @@ function convert.convert(...)
 				else
 					pos = obj.Position
 				end
-				if pos and (pos - playerPos).Magnitude <= radius then
-					return true
+				-- Внутри for _, obj:
+				if pos then
+					local dx = pos.X - pp.X
+					local dz = pos.Z - pp.Z
+					local horiz = math.sqrt(dx*dx + dz*dz)
+					warn(("[balloon-debug] %s horiz=%.1f y=%.1f"):format(obj.Name, horiz, pos.Y - pp.Y))
+					if horiz <= radius then return true end
 				end
 			end
 		end
 		return false
 	end
 
-	-- Ждём пока шарик пропадёт (в радиусе 30 от игрока).
-	-- Если шарика нет — выходим сразу.
-	local function waitForBalloonToDisappear(maxWait)
-		maxWait = tonumber(maxWait) or 60
+	-- Ждём появления + исчезновения
+	local function waitForBalloonToDisappear(maxWait, appearWait)
+		maxWait   = tonumber(maxWait)   or 60
+		appearWait = tonumber(appearWait) or 10
 
-		-- Если шарика нет рядом — не ждём
-		if not hasBalloonNearPlayer(30) then
+		-- Фаза 1: ждём появления (шарик спавнится с задержкой)
+		local seen = hasBalloonNearPlayer(30)
+		if not seen then
+			warn("[balloon] waiting for appear (max " .. appearWait .. "s)...")
+			local appearDeadline = tick() + appearWait
+			while tick() < appearDeadline do
+				if hasBalloonNearPlayer(30) then
+					seen = true
+					break
+				end
+				task.wait(0.15)
+			end
+		end
+
+		if not seen then
+			warn("[balloon] NOT found within " .. appearWait .. "s, skipping wait")
 			return false
 		end
 
-		warn("[convert] balloon detected nearby, waiting for it to disappear...")
+		-- Фаза 2: ждём исчезновения
+		warn("[balloon] detected, waiting for disappear (max " .. maxWait .. "s)...")
 		local start = tick()
-
 		while tick() - start < maxWait do
 			if not hasBalloonNearPlayer(30) then
-				print(("convert balloon gone at %.1fs, resuming"):format(tick() - start))
+				warn(("[balloon] gone after %.1fs"):format(tick() - start))
 				return true
 			end
 			task.wait(0.15)
 		end
-
-		warn(("[convert] balloon still here after %ds, resuming anyway"):format(maxWait))
+		warn(("[balloon] still here after %ds, giving up"):format(maxWait))
 		return false
 	end
 
@@ -524,7 +542,7 @@ function convert.convert(...)
 						if farmModule and type(farmModule.farm) == "function" then
 							-- Ждём шарик только если включён Balloon и шарик реально рядом с игроком
 							if actives["balloon"] == true then
-								waitForBalloonToDisappear(300)
+								waitForBalloonToDisappear(300, 10)   -- 60 сек ждём исчезновения, 8 сек появления
 							end
 							farmModule.farm()
 						end
@@ -742,7 +760,7 @@ function convert.convert(...)
 
 	return true
 end
-print(123123123123)
+print(1111)
 
 function convert.equip_mask(name)
 	--print(2)
