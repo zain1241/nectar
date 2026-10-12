@@ -370,6 +370,54 @@ function convert.convert(...)
 
 		return nil
 	end
+	
+	-- Проверяем есть ли сейчас hive-шарик (тот что появляется при конвертации)
+	--local function hasHiveBalloon()
+	--	local balloons = workspace:FindFirstChild("Balloons")
+	--	if not balloons then return false end
+	--	local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+	--	if not hiveBalloons then return false end
+
+	--	for _, obj in ipairs(hiveBalloons:GetChildren()) do
+	--		if obj:IsA("Model") then
+	--			local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+	--			if part and part.Transparency < 1 and part.Parent then
+	--				return true
+	--			end
+	--		elseif obj:IsA("BasePart") then
+	--			if obj.Transparency < 1 then
+	--				return true
+	--			end
+	--		end
+	--	end
+	--	return false
+	--end
+	
+	local function hasHiveBalloon()
+		local balloons = workspace:FindFirstChild("Balloons")
+		if not balloons then return false end
+		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+		if not hiveBalloons then return false end
+
+		for _, obj in ipairs(hiveBalloons:GetChildren()) do
+			-- Шарик может быть Model или BasePart — оба варианта считаем «висит».
+			if obj:IsA("Model") or obj:IsA("BasePart") then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function waitForHiveBalloon(maxWait)
+		local t0 = tick()
+		while tick() - t0 < maxWait do
+			if not hasHiveBalloon() then
+				return true
+			end
+			task.wait(0.25)
+		end
+		return false
+	end
 
 	local function finish(success, reason)
 		if finished or not currentJob() then
@@ -415,9 +463,22 @@ function convert.convert(...)
 
 					-- A special-event callback is waiting for __conversionFinishedAt
 					-- and will resume its own target. Do not launch a competing field route.
+					--if not hasPendingSpecial() then
+					--	farmModule = getFarmingModule()
+					--	if farmModule and type(farmModule.farm) == "function" then
+					--		farmModule.farm()
+					--	end
+					--end
+					
 					if not hasPendingSpecial() then
 						farmModule = getFarmingModule()
 						if farmModule and type(farmModule.farm) == "function" then
+							local wantBalloon = actives["balloon"] == true or actives["bubble"] == true
+							if wantBalloon and hasHiveBalloon() then
+								warn("[convert] waiting for hive balloon to pop...")
+								waitForHiveBalloon(30)
+								warn("[convert] hive balloon gone, resuming farm")
+							end
 							farmModule.farm()
 						end
 					end
@@ -432,12 +493,10 @@ function convert.convert(...)
 					local fm = getFarmingModule()
 					if not fm then return end
 
-					-- Если pollen снова набрался — значит уже фармим, всё ок.
 					local info = convert.get_pollen_info()
 					if info and info.pollen > 0 then return end
 
-					-- Застряли: __goingToHive или __fieldRouteInProgress держатся дольше 8 сек
-					if fm.__goingToHive or fm.__fieldRouteInProgress then
+					if fm.__goingToHive or fm.__fieldRouteInProgress and not hasHiveBalloon() then
 						warn("[convert] safety net: bot stuck after conversion, forcing farm()")
 						fm.__goingToHive = false
 						fm.__fieldRouteInProgress = false
@@ -623,7 +682,7 @@ function convert.convert(...)
 
 	return true
 end
-print(1111)
+print(4444)
 
 function convert.equip_mask(name)
 	--print(2)
