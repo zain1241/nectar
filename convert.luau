@@ -370,7 +370,7 @@ function convert.convert(...)
 
 		return nil
 	end
-	
+
 	-- Проверяем есть ли сейчас hive-шарик (тот что появляется при конвертации)
 	--local function hasHiveBalloon()
 	--	local balloons = workspace:FindFirstChild("Balloons")
@@ -392,7 +392,7 @@ function convert.convert(...)
 	--	end
 	--	return false
 	--end
-	
+
 	-- Находит свой улей (по Owner)
 	local function getMyHive()
 		local honeycombs = workspace:FindFirstChild("Honeycombs")
@@ -448,8 +448,13 @@ function convert.convert(...)
 				else
 					pos = obj.Position
 				end
-				if pos and (pos - hivePos).Magnitude <= 20 then
-					return true
+				if pos then
+					-- BalloonRoot may be high above the hive; compare XZ only.
+					local dx = pos.X - hivePos.X
+					local dz = pos.Z - hivePos.Z
+					if math.sqrt(dx * dx + dz * dz) <= 20 then
+						return true
+					end
 				end
 			end
 		end
@@ -497,11 +502,14 @@ function convert.convert(...)
 		maxWait    = tonumber(maxWait)    or 60
 		appearWait = tonumber(appearWait) or 60
 
-		local seen = hasHiveBalloon()
+		-- It may have appeared during conversion and disappeared before this check.
+		local seen = hasHiveBalloon() or convert.__sawBalloonDuringConvert == true
 		if not seen then
 			print("[balloon] waiting for appear (max " .. appearWait .. "s)...")
 			local appearDeadline = tick() + appearWait
-			while tick() < appearDeadline do
+			while tick() < appearDeadline
+				and currentJob()
+				and actives["auto_farm"] == true do
 				if hasHiveBalloon() then seen = true break end
 				task.wait(0.2)
 			end
@@ -512,16 +520,21 @@ function convert.convert(...)
 			return false
 		end
 
-		print("[balloon] detected, waiting for disappear (max " .. maxWait .. "s)...")
+		print("[balloon] detected, waiting for disappear...")
 		local start = tick()
-		while tick() - start < maxWait do
+		local warnedTimeout = false
+		while currentJob() and actives["auto_farm"] == true do
 			if not hasHiveBalloon() then
 				print(("[balloon] gone after %.1fs"):format(tick() - start))
 				return true
 			end
+			if not warnedTimeout and maxWait > 0 and tick() - start >= maxWait then
+				warn(("[balloon] still present after %ds; continuing to wait"):format(maxWait))
+				warnedTimeout = true
+			end
 			task.wait(0.2)
 		end
-		print(("[balloon] still here after %ds"):format(maxWait))
+		print("[balloon] wait cancelled because AutoFarm stopped or conversion job changed")
 		return false
 	end
 
@@ -549,12 +562,28 @@ function convert.convert(...)
 			convert.__failedAt = nil
 			convert.__retryCount = 0
 			convert.__retryScheduled = false
+
+			-- Lock AutoFarm before yielding: otherwise the watchdog sees the player
+			-- standing at the hive and starts a competing route back to the field.
+			local shouldWaitForBalloon = actives["balloon"] == true and not hasPendingSpecial()
+			if farmModule then
+				farmModule.__waitingForBalloon = shouldWaitForBalloon
+				if shouldWaitForBalloon then
+					-- Invalidate any stale field-route callback from before conversion.
+					farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
+					farmModule.__fieldRouteInProgress = false
+					if movement.stop then pcall(movement.stop) end
+				end
+			end
 			setGoingToHive(false)
 
 			if actives["auto_farm"] == true then
 				task.defer(function()
 					task.wait(0.25)
 					if not currentJob() or actives["auto_farm"] ~= true then
+						farmModule = getFarmingModule()
+						if farmModule then farmModule.__waitingForBalloon = false end
+						setGoingToHive(false)
 						return
 					end
 
@@ -575,41 +604,62 @@ function convert.convert(...)
 					--		farmModule.farm()
 					--	end
 					--end
-					
+
 					if not hasPendingSpecial() then
 						farmModule = getFarmingModule()
 						if farmModule and type(farmModule.farm) == "function" then
-							-- Ждём шарик только если включён Balloon и шарик реально рядом с игроком
 							if actives["balloon"] == true then
-								waitForBalloonToDisappear(300, 60)
+								-- Re-assert the lock in case a special-event state changed during the defer.
+								if farmModule.__waitingForBalloon ~= true then
+									farmModule.__waitingForBalloon = true
+									farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
+									farmModule.__fieldRouteInProgress = false
+									if movement.stop then pcall(movement.stop) end
+								end
+								-- Give the balloon time to spawn, then wait until it vanishes.
+								waitForBalloonToDisappear(300, 4)
+							end
+						end
+						-- Always release the lock when the wait ends or is cancelled.
+						if farmModule then farmModule.__waitingForBalloon = false end
+						setGoingToHive(false)
+						if currentJob() and actives["auto_farm"] == true
+							and farmModule and type(farmModule.farm) == "function" then
+							if farmModule.__fieldRouteInProgress then
+								farmModule.__fieldRouteInProgress = false
 							end
 							farmModule.farm()
 						end
+					else
+						if farmModule then farmModule.__waitingForBalloon = false end
+						setGoingToHive(false)
 					end
 				end)
-				
-				-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
-				-- "висит" на улье (pollen=0, но идёт движение к полю), принудительно запускаем farm().
-				--task.delay(8, function()
-				--	if convert.__jobId ~= jobId then return end
-				--	if actives["auto_farm"] ~= true then return end
-
-				--	local fm = getFarmingModule()
-				--	if not fm then return end
-
-				--	local info = convert.get_pollen_info()
-				--	if info and info.pollen > 0 then return end
-
-				--	if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
-				--		warn("[convert] safety net: bot stuck after conversion, forcing farm()")
-				--		fm.__goingToHive = false
-				--		fm.__fieldRouteInProgress = false
-				--		fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
-				--		if type(fm.farm) == "function" then
-				--			fm.farm()
-				--		end
-				--	end
+			else
+				if farmModule then farmModule.__waitingForBalloon = false end
 			end
+
+			-- Safety net: если через 8 секунд после успешной конвертации бот всё ещё
+			-- "висит" на улье (pollen=0, но идёт движение к полю), принудительно запускаем farm().
+			--task.delay(8, function()
+			--	if convert.__jobId ~= jobId then return end
+			--	if actives["auto_farm"] ~= true then return end
+
+			--	local fm = getFarmingModule()
+			--	if not fm then return end
+
+			--	local info = convert.get_pollen_info()
+			--	if info and info.pollen > 0 then return end
+
+			--	if (fm.__goingToHive or fm.__fieldRouteInProgress) and not hasHiveBalloon() then
+			--		warn("[convert] safety net: bot stuck after conversion, forcing farm()")
+			--		fm.__goingToHive = false
+			--		fm.__fieldRouteInProgress = false
+			--		fm.__fieldRouteId = (fm.__fieldRouteId or 0) + 1
+			--		if type(fm.farm) == "function" then
+			--			fm.farm()
+			--		end
+			--	end
 			return
 		end
 
@@ -748,7 +798,7 @@ function convert.convert(...)
 			return false
 		end
 	end
-	
+
 	-- Начинаем следить за шариком с самого старта конвертации.
 	-- Он может появиться в любой момент, не только после pollen=0.
 	convert.__sawBalloonDuringConvert = false
@@ -799,7 +849,7 @@ function convert.convert(...)
 
 	return true
 end
-print(4444)
+print(123123123123)
 
 function convert.equip_mask(name)
 	--print(2)
