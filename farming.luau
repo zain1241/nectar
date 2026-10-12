@@ -1702,7 +1702,7 @@ function farming.farm(...)
 					break
 				end
 
-				if farming.__goingToHive or actives["convert"] == true or (mod.convert and mod.convert.__running) then
+				if farming.__goingToHive or farming.__waitingForBalloon == true or actives["convert"] == true or (mod.convert and mod.convert.__running) then
 					actives["move"] = false
 					task.wait(0.25)
 					continue
@@ -2171,7 +2171,7 @@ function farming.farm(...)
 	end
 end
 
-print(123123)
+print(123123123123)
 
 task.spawn(function()
 	task.wait(2)
