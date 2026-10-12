@@ -399,8 +399,12 @@ function convert.convert(...)
 		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
-		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			-- Шарик может быть Model или BasePart — оба варианта считаем «висит».
+		local children = hiveBalloons:GetChildren()
+		if #children > 0 then
+		    warn("[balloon-check] found", #children, "items:", children[1].Name)
+		end
+
+		for _, obj in ipairs(children) do
 			if obj:IsA("Model") or obj:IsA("BasePart") then
 				return true
 			end
@@ -409,19 +413,26 @@ function convert.convert(...)
 	end
 
 	local function waitForHiveBalloon(maxWait)
-		-- Фаза 1: ждём ПОЯВЛЕНИЯ (до 5 сек)
-		local appearDeadline = tick() + 5
-		local appeared = false
+		-- Фаза 1: ждём появления (до 8 сек), если его ещё нет
+		local appearDeadline = tick() + 8
 		while tick() < appearDeadline do
-			if hasHiveBalloon() then appeared = true; break end
-			task.wait(0.1)
+			if hasHiveBalloon() then
+				break
+			end
+			task.wait(0.15)
 		end
-		if not appeared then return true end  -- не появился — не ждём
 
-		-- Фаза 2: ждём ИСЧЕЗНОВЕНИЯ
+		-- Если шарик всё ещё не появился — выходим
+		if not hasHiveBalloon() then
+			return false
+		end
+
+		-- Фаза 2: ждём исчезновения
 		local t0 = tick()
 		while tick() - t0 < maxWait do
-			if not hasHiveBalloon() then return true end
+			if not hasHiveBalloon() then
+				return true
+			end
 			task.wait(0.25)
 		end
 		return false
@@ -482,10 +493,15 @@ function convert.convert(...)
 						farmModule = getFarmingModule()
 						if farmModule and type(farmModule.farm) == "function" then
 							local wantBalloon = actives["balloon"] == true or actives["bubble"] == true
-							if wantBalloon and hasHiveBalloon() then
-								warn("[convert] waiting for hive balloon to pop...")
-								waitForHiveBalloon(30)
-								warn("[convert] hive balloon gone, resuming farm")
+
+							if wantBalloon then
+								warn("[convert] balloon wait enabled, checking...")
+								local resolved = waitForHiveBalloon(300)
+								if resolved then
+									warn("[convert] balloon resolved, resuming farm")
+								else
+									warn("[convert] balloon wait timed out, resuming farm anyway")
+								end
 							end
 							farmModule.farm()
 						end
@@ -653,6 +669,20 @@ function convert.convert(...)
 			return false
 		end
 	end
+	
+	-- Начинаем следить за шариком с самого старта конвертации.
+	-- Он может появиться в любой момент, не только после pollen=0.
+	convert.__sawBalloonDuringConvert = false
+	convert.__balloonWatchJobId = jobId
+
+	task.spawn(function()
+		while convert.__jobId == jobId and not finished do
+			if hasHiveBalloon() then
+				convert.__sawBalloonDuringConvert = true
+			end
+			task.wait(0.2)
+		end
+	end)
 
 	-- One polling loop per conversion. A successful conversion is confirmed by
 	-- the backpack meter reaching zero and staying there briefly; balloon popping
@@ -690,7 +720,7 @@ function convert.convert(...)
 
 	return true
 end
-print(123123)
+print(4444)
 
 function convert.equip_mask(name)
 	--print(2)
