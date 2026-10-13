@@ -332,7 +332,9 @@ end
 function convert.convert(...)
 	-- Prevent overlapping conversion controllers. Multiple ToggleHoneyMaking calls
 	-- can turn conversion off and spawn duplicate pollers that keep farming in a loop.
-	if convert.__running or convert.__retryScheduled then
+	local waitingFarm = getFarmingModule()
+	if convert.__running or convert.__retryScheduled
+		or (waitingFarm and waitingFarm.__waitingForBalloon == true) then
 		return false
 	end
 
@@ -420,99 +422,91 @@ function convert.convert(...)
 		return nil
 	end
 
-	-- HiveBalloonInstance в карте может быть Folder, а не Model.
-	-- Поэтому ищем BalloonRoot/BalloonBody рекурсивно внутри контейнера.
+	-- HiveBalloonInstance may be a Folder. Track the real visible balloon body,
+	-- not just the persistent Folder/template or its changing distance to the hive.
 	local function getBalloonPosition(obj)
 		if not obj then return nil end
 		if obj:IsA("BasePart") then return obj.Position end
 
 		local root = obj:FindFirstChild("BalloonRoot", true)
-		if not root and obj:IsA("Model") then
-			root = obj.PrimaryPart
-		end
-		if not root then root = obj:FindFirstChild("BalloonBody", true) end
-		if not root then root = obj:FindFirstChildWhichIsA("BasePart", true) end
-
 		if root and root:IsA("BasePart") then return root.Position end
 		if root and root:IsA("Attachment") then return root.WorldPosition end
-		return nil
+
+		local body = obj:FindFirstChild("BalloonBody", true)
+		if body and body:IsA("BasePart") then return body.Position end
+		if obj:IsA("Model") and obj.PrimaryPart then return obj.PrimaryPart.Position end
+		local part = obj:FindFirstChildWhichIsA("BasePart", true)
+		return part and part.Position or nil
 	end
 
-	-- Проверяет шарик рядом с МОИМ ульем (не рядом с игроком!)
-	local function hasHiveBalloon()
+	local function isVisibleBalloon(obj)
+		if not obj or not obj.Parent then return false end
+		local body = obj:IsA("BasePart") and obj or obj:FindFirstChild("BalloonBody", true)
+		if body and body:IsA("BasePart") then
+			return body.Parent ~= nil and body.Transparency < 1
+		end
+
+		-- Fallback for game versions where the visible sphere has another name.
+		for _, part in ipairs(obj:GetDescendants()) do
+			if part:IsA("BasePart") and part.Name ~= "BalloonRoot" and part.Transparency < 1 then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function findHiveBalloon()
 		local balloons = workspace:FindFirstChild("Balloons")
 		local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
-		if not hiveBalloons then return false end
+		if not hiveBalloons then return nil end
 
 		local hive = getMyHive()
-		if not hive then
-			-- Если улей ещё не определился, проверяем наличие любого balloon-контейнера.
-			for _, obj in ipairs(hiveBalloons:GetChildren()) do
-				if getBalloonPosition(obj) then return true end
-			end
-			return false
-		end
-
-		local spawnPos = hive:FindFirstChild("SpawnPos")
 		local hivePos
-		if spawnPos then
-			if spawnPos:IsA("BasePart") then hivePos = spawnPos.Position
-			elseif spawnPos:IsA("Vector3Value") then hivePos = spawnPos.Value
-			elseif spawnPos:IsA("CFrameValue") then hivePos = spawnPos.Value.Position
-			elseif spawnPos:IsA("Attachment") then hivePos = spawnPos.WorldPosition
-			end
-		end
-		if not hivePos then return false end
-
-		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			local pos = getBalloonPosition(obj)
-			if pos then
-				-- BalloonRoot is high above the hive, so use horizontal distance only.
-				local dx = pos.X - hivePos.X
-				local dz = pos.Z - hivePos.Z
-				if math.sqrt(dx * dx + dz * dz) <= 20 then
-					return true
+		if hive then
+			local spawnPos = hive:FindFirstChild("SpawnPos")
+			if spawnPos then
+				if spawnPos:IsA("BasePart") then hivePos = spawnPos.Position
+				elseif spawnPos:IsA("Vector3Value") then hivePos = spawnPos.Value
+				elseif spawnPos:IsA("CFrameValue") then hivePos = spawnPos.Value.Position
+				elseif spawnPos:IsA("Attachment") then hivePos = spawnPos.WorldPosition
 				end
 			end
 		end
-		return false
-	end
 
-	-- Горизонтальная дистанция (без Y) — шарик висит высоко над ульем
-	local function hasBalloonNearPlayer(radius)
-		radius = tonumber(radius) or 30
-		local character = find.player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart")
-		if not root then return false end
-		local balloons = workspace:FindFirstChild("Balloons")
-		local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
-		if not hiveBalloons then return false end
-
-		local pp = root.Position
 		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			local pos = getBalloonPosition(obj)
-			if pos then
-				local dx = pos.X - pp.X
-				local dz = pos.Z - pp.Z
-				if math.sqrt(dx * dx + dz * dz) <= radius then return true end
+			if isVisibleBalloon(obj) then
+				local pos = getBalloonPosition(obj)
+				if pos then
+					if not hivePos then return obj end
+					local dx, dz = pos.X - hivePos.X, pos.Z - hivePos.Z
+					if math.sqrt(dx * dx + dz * dz) <= 20 then
+						return obj
+					end
+				end
 			end
 		end
-		return false
+		return nil
 	end
 
-	-- Ждём появления + исчезновения
+	local function hasHiveBalloon()
+		return findHiveBalloon() ~= nil
+	end
+
+	-- Wait for appearance, then follow that specific visible balloon instance.
+	-- Distance is used only to initially identify the balloon near our hive;
+	-- once found, moving/swaying outside the radius cannot end the wait.
 	local function waitForBalloonToDisappear(maxWait, appearWait)
-		maxWait    = tonumber(maxWait)    or 60
+		maxWait = tonumber(maxWait) or 60
 		appearWait = tonumber(appearWait) or 60
 
-		-- It may have appeared during conversion and disappeared before this check.
-		local seen = hasHiveBalloon() or convert.__sawBalloonDuringConvert == true
+		local trackedBalloon = findHiveBalloon() or convert.__sawBalloonInstanceDuringConvert
+		local seen = trackedBalloon ~= nil or convert.__sawBalloonDuringConvert == true
 		if not seen then
 			print("[balloon] waiting for appear (max " .. appearWait .. "s)...")
 			local appearDeadline = tick() + appearWait
-			-- Balloon wait is independent of conversion job IDs.
 			while tick() < appearDeadline and actives["auto_farm"] == true do
-				if hasHiveBalloon() then seen = true break end
+				trackedBalloon = findHiveBalloon()
+				if trackedBalloon then seen = true break end
 				task.wait(0.2)
 			end
 		end
@@ -524,19 +518,38 @@ function convert.convert(...)
 
 		print("[balloon] detected, waiting for disappear...")
 		local start = tick()
+		local missingSince = nil
 		local warnedTimeout = false
-		-- Do not cancel because a new conversion job ID was created.
 		while actives["auto_farm"] == true do
-			if not hasHiveBalloon() then
-				print(("[balloon] gone after %.1fs"):format(tick() - start))
-				return true
+			local trackedVisible = isVisibleBalloon(trackedBalloon)
+			if trackedVisible then
+				missingSince = nil
+			else
+				-- If one balloon was removed and another one spawned at this hive,
+				-- track the replacement instead of mistaking it for completion.
+				local replacement = findHiveBalloon()
+				if replacement and replacement ~= trackedBalloon then
+					trackedBalloon = replacement
+					missingSince = nil
+				else
+					missingSince = missingSince or tick()
+					-- Debounce short visibility/replication gaps.
+					if tick() - missingSince >= 1.25 then
+						print(("[balloon] gone after %.1fs"):format(tick() - start))
+						convert.__sawBalloonDuringConvert = false
+						convert.__sawBalloonInstanceDuringConvert = nil
+						return true
+					end
+				end
 			end
+
 			if not warnedTimeout and maxWait > 0 and tick() - start >= maxWait then
 				warn(("[balloon] still present after %ds; continuing to wait"):format(maxWait))
 				warnedTimeout = true
 			end
 			task.wait(0.2)
 		end
+
 		print("[balloon] wait cancelled because AutoFarm stopped")
 		return false
 	end
@@ -566,13 +579,12 @@ function convert.convert(...)
 			convert.__retryCount = 0
 			convert.__retryScheduled = false
 
-			-- Lock AutoFarm before yielding: otherwise the watchdog sees the player
-			-- standing at the hive and starts a competing route back to the field.
-			local shouldWaitForBalloon = actives["balloon"] == true and not hasPendingSpecial()
+			-- Lock movement before yielding. Also wait during Puffshroom/Sprout
+			-- conversions; their resume callbacks must not run until the balloon is gone.
+			local shouldWaitForBalloon = actives["balloon"] == true
 			if farmModule then
 				farmModule.__waitingForBalloon = shouldWaitForBalloon
 				if shouldWaitForBalloon then
-					-- Invalidate stale field/hive callbacks so they cannot start another conversion.
 					farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
 					farmModule.__fieldRouteInProgress = false
 					farmModule.__hiveTripId = (farmModule.__hiveTripId or 0) + 1
@@ -584,7 +596,6 @@ function convert.convert(...)
 			if actives["auto_farm"] == true then
 				task.defer(function()
 					task.wait(0.25)
-					-- A new conversion job ID does not cancel balloon collection.
 					if actives["auto_farm"] ~= true then
 						farmModule = getFarmingModule()
 						if farmModule then farmModule.__waitingForBalloon = false end
@@ -601,47 +612,20 @@ function convert.convert(...)
 						pcall(farmModule.resetCharacterState)
 					end
 
-					-- A special-event callback is waiting for __conversionFinishedAt
-					-- and will resume its own target. Do not launch a competing field route.
-					--if not hasPendingSpecial() then
-					--	farmModule = getFarmingModule()
-					--	if farmModule and type(farmModule.farm) == "function" then
-					--		farmModule.farm()
-					--	end
-					--end
+					if shouldWaitForBalloon and actives["balloon"] == true then
+						if farmModule then farmModule.__waitingForBalloon = true end
+						waitForBalloonToDisappear(300, 4)
+					end
 
-					if not hasPendingSpecial() then
-						farmModule = getFarmingModule()
-						if farmModule and type(farmModule.farm) == "function" then
-							if actives["balloon"] == true then
-								-- Re-assert the lock in case a special-event state changed during the defer.
-								if farmModule.__waitingForBalloon ~= true then
-									farmModule.__waitingForBalloon = true
-									farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
-									farmModule.__fieldRouteInProgress = false
-									if movement.stop then pcall(movement.stop) end
-								end
-								-- Give the balloon time to spawn, then wait until it vanishes.
-								waitForBalloonToDisappear(300, 4)
-							end
-						end
-						-- If another conversion was started, let it finish under its own lock.
-						local anotherConversionActive = actives["convert"] == true
-							or convert.__running == true or convert.__retryScheduled == true
-						if not anotherConversionActive then
-							if farmModule then farmModule.__waitingForBalloon = false end
-							setGoingToHive(false)
-							if actives["auto_farm"] == true
-								and farmModule and type(farmModule.farm) == "function" then
-								if farmModule.__fieldRouteInProgress then
-									farmModule.__fieldRouteInProgress = false
-								end
-								farmModule.farm()
-							end
-						end
-					else
-						if farmModule then farmModule.__waitingForBalloon = false end
-						setGoingToHive(false)
+					farmModule = getFarmingModule()
+					if farmModule then farmModule.__waitingForBalloon = false end
+					setGoingToHive(false)
+
+					-- Special-event callbacks resume their own target after convertAndWait
+					-- observes the released wait lock. Normal AutoFarm resumes here.
+					if actives["auto_farm"] == true and not hasPendingSpecial()
+						and farmModule and type(farmModule.farm) == "function" then
+						farmModule.farm()
 					end
 				end)
 			else
@@ -811,12 +795,15 @@ function convert.convert(...)
 	-- Начинаем следить за шариком с самого старта конвертации.
 	-- Он может появиться в любой момент, не только после pollen=0.
 	convert.__sawBalloonDuringConvert = false
+	convert.__sawBalloonInstanceDuringConvert = nil
 	convert.__balloonWatchJobId = jobId
 
 	task.spawn(function()
 		while convert.__jobId == jobId and not finished do
-			if hasHiveBalloon() then
+			local balloon = findHiveBalloon()
+			if balloon then
 				convert.__sawBalloonDuringConvert = true
+				convert.__sawBalloonInstanceDuringConvert = balloon
 			end
 			task.wait(0.2)
 		end
@@ -866,7 +853,7 @@ function convert.convert(...)
 
 	return true
 end
-print(4444)
+print(123123)
 
 function convert.equip_mask(name)
 	--print(2)
