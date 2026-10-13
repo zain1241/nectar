@@ -510,9 +510,8 @@ function convert.convert(...)
 		if not seen then
 			print("[balloon] waiting for appear (max " .. appearWait .. "s)...")
 			local appearDeadline = tick() + appearWait
-			while tick() < appearDeadline
-				and currentJob()
-				and actives["auto_farm"] == true do
+			-- Balloon wait is independent of conversion job IDs.
+			while tick() < appearDeadline and actives["auto_farm"] == true do
 				if hasHiveBalloon() then seen = true break end
 				task.wait(0.2)
 			end
@@ -526,7 +525,8 @@ function convert.convert(...)
 		print("[balloon] detected, waiting for disappear...")
 		local start = tick()
 		local warnedTimeout = false
-		while currentJob() and actives["auto_farm"] == true do
+		-- Do not cancel because a new conversion job ID was created.
+		while actives["auto_farm"] == true do
 			if not hasHiveBalloon() then
 				print(("[balloon] gone after %.1fs"):format(tick() - start))
 				return true
@@ -537,7 +537,7 @@ function convert.convert(...)
 			end
 			task.wait(0.2)
 		end
-		print("[balloon] wait cancelled because AutoFarm stopped or conversion job changed")
+		print("[balloon] wait cancelled because AutoFarm stopped")
 		return false
 	end
 
@@ -572,9 +572,10 @@ function convert.convert(...)
 			if farmModule then
 				farmModule.__waitingForBalloon = shouldWaitForBalloon
 				if shouldWaitForBalloon then
-					-- Invalidate any stale field-route callback from before conversion.
+					-- Invalidate stale field/hive callbacks so they cannot start another conversion.
 					farmModule.__fieldRouteId = (farmModule.__fieldRouteId or 0) + 1
 					farmModule.__fieldRouteInProgress = false
+					farmModule.__hiveTripId = (farmModule.__hiveTripId or 0) + 1
 					if movement.stop then pcall(movement.stop) end
 				end
 			end
@@ -583,7 +584,8 @@ function convert.convert(...)
 			if actives["auto_farm"] == true then
 				task.defer(function()
 					task.wait(0.25)
-					if not currentJob() or actives["auto_farm"] ~= true then
+					-- A new conversion job ID does not cancel balloon collection.
+					if actives["auto_farm"] ~= true then
 						farmModule = getFarmingModule()
 						if farmModule then farmModule.__waitingForBalloon = false end
 						setGoingToHive(false)
@@ -623,15 +625,19 @@ function convert.convert(...)
 								waitForBalloonToDisappear(300, 4)
 							end
 						end
-						-- Always release the lock when the wait ends or is cancelled.
-						if farmModule then farmModule.__waitingForBalloon = false end
-						setGoingToHive(false)
-						if currentJob() and actives["auto_farm"] == true
-							and farmModule and type(farmModule.farm) == "function" then
-							if farmModule.__fieldRouteInProgress then
-								farmModule.__fieldRouteInProgress = false
+						-- If another conversion was started, let it finish under its own lock.
+						local anotherConversionActive = actives["convert"] == true
+							or convert.__running == true or convert.__retryScheduled == true
+						if not anotherConversionActive then
+							if farmModule then farmModule.__waitingForBalloon = false end
+							setGoingToHive(false)
+							if actives["auto_farm"] == true
+								and farmModule and type(farmModule.farm) == "function" then
+								if farmModule.__fieldRouteInProgress then
+									farmModule.__fieldRouteInProgress = false
+								end
+								farmModule.farm()
 							end
-							farmModule.farm()
 						end
 					else
 						if farmModule then farmModule.__waitingForBalloon = false end
@@ -860,7 +866,7 @@ function convert.convert(...)
 
 	return true
 end
-print(123123123123)
+print(4444)
 
 function convert.equip_mask(name)
 	--print(2)
