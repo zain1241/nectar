@@ -599,9 +599,17 @@ end
 
 -- Hand field return back to the normal AutoFarm route.
 -- This avoids competing movement callbacks and guarantees the main loop rebuilds its route.
-local function requestFieldRecovery(reason)
+local function requestFieldRecovery(reason, targetField)
 	if actives["auto_farm"] ~= true then
 		return
+	end
+
+	if targetField then
+		local zones = workspace:FindFirstChild("FlowerZones")
+		if zones and zones:FindFirstChild(targetField) then
+			farming.__puffReturnField = targetField
+			actives["field"] = targetField
+		end
 	end
 
 	farming.__forceFieldReturn = true
@@ -612,6 +620,9 @@ local function requestFieldRecovery(reason)
 
 	task.delay(2, function()
 		if farming.__forceFieldReturn and actives["auto_farm"] == true and not farmingActive then
+			if farming.__puffReturnField then
+				actives["field"] = farming.__puffReturnField
+			end
 			farming.__forceFieldReturn = nil
 			task.spawn(function()
 				farming.farm()
@@ -655,6 +666,15 @@ local function convertAndWait(isCurrent, label)
 			previousFinishedAt = finishedAt
 
 			if converter.__conversionSuccess == true then
+				-- A successful honey conversion is not complete for the event route
+				-- until the hive balloon has disappeared and convert.lua releases this lock.
+				while farming.__waitingForBalloon == true
+					and actives["auto_farm"] == true do
+					local okCurrent, current = pcall(isCurrent)
+					if not okCurrent or current ~= true then return false end
+					task.wait(0.2)
+				end
+				if actives["auto_farm"] ~= true then return false end
 				return true
 			end
 
@@ -1223,16 +1243,27 @@ function farming.puffsrooms(...)
 		end
 
 		local puffField = getZone(position)
-		local returnField = farming.__puffOrigField or actives["field"] or puffField
+		local zones = workspace:FindFirstChild("FlowerZones")
+		local returnField = farming.__puffOrigField or farming.__puffReturnField
+		if not (type(returnField) == "string" and zones and zones:FindFirstChild(returnField)) then
+			local selectedField = actives["field"]
+			if type(selectedField) == "string" and zones and zones:FindFirstChild(selectedField) then
+				returnField = selectedField
+			elseif type(puffField) == "string" and zones and zones:FindFirstChild(puffField) then
+				returnField = puffField
+			else
+				returnField = nil
+			end
+		end
 		if returnField then
+			farming.__puffReturnField = returnField
 			actives["field"] = returnField
 		end
 
-		-- Reuse AutoFarm's normal route instead of starting a competing move.
-		-- This avoids waiting for an event-local go_to_field callback that may never fire.
+		-- Reuse AutoFarm's normal route, but pin the destination until it is reached.
 		if movement.stop then pcall(movement.stop) end
 		clearPuffState()
-		requestFieldRecovery("Puffshroom collection finished; routing back to the selected field")
+		requestFieldRecovery("Puffshroom collection finished; routing back to the selected field", returnField)
 	end
 
 	local function findNextShroom()
@@ -1480,6 +1511,10 @@ function farming.farm(...)
 
 	if not status then
 		farming.__waitingForBalloon = false
+		if farming.__puffReturnField then
+			actives["field"] = farming.__puffReturnField
+			farming.__puffReturnField = nil
+		end
 		-- Invalidate any pending return-to-field movement when AutoFarm is disabled.
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -1843,6 +1878,9 @@ function farming.farm(...)
 					continue
 				end
 
+				if farming.__puffReturnField then
+					actives["field"] = farming.__puffReturnField
+				end
 				local zones = workspace:FindFirstChild("FlowerZones")
 				if actives["field"] == "" or actives["field"] == false or actives["field"] == nil then
 					field = nil
@@ -2134,6 +2172,10 @@ function farming.farm(...)
 			if not actives["auto_farm"] then
 				return
 			end
+			if farming.__puffReturnField then
+				actives["field"] = farming.__puffReturnField
+				farming.__puffReturnField = nil
+			end
 			--warn("[farming] reached field; resuming AutoFarm")
 			if not farmingActive then
 				task.spawn(metod)
@@ -2165,7 +2207,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123)
 
 task.spawn(function()
 	task.wait(2)
