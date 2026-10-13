@@ -32,14 +32,6 @@ local queue = {
 	tokens = {},
 }
 
--- Read the environment-wide lock as well as the module-local flag so a stale
--- module reference cannot let the watchdog or a queued farm() call interrupt
--- balloon waiting.
-local function isBalloonWaitActive()
-	return rawget(env, "__NECTAR_BALLOON_WAITING") == true
-		or farming.__waitingForBalloon == true
-end
-
 local function resetCharacterState()
 	local character = find.player.Character
 	if not character then
@@ -615,7 +607,7 @@ local function requestFieldRecovery(reason)
 	farming.__forceFieldReturn = true
 	farming.__goingToHive = false
 	if reason then
-		warn("[special farm] requesting normal field recovery:", reason)
+		--warn("[special farm] requesting normal field recovery:", reason)
 	end
 
 	task.delay(2, function()
@@ -669,7 +661,7 @@ local function convertAndWait(isCurrent, label)
 			if not converter.__running
 				and not converter.__retryScheduled
 				and (tonumber(converter.__retryCount) or 0) >= 2 then
-				warn("[" .. tostring(label) .. "] conversion failed after all retries; staying at hive instead of returning with full pollen")
+				--warn("[" .. tostring(label) .. "] conversion failed after all retries; staying at hive instead of returning with full pollen")
 				return false
 			end
 		end
@@ -902,7 +894,7 @@ function farming.sprout(...)
 			end
 			return
 		end
-		
+
 		farming.__pendingSprout = nil
 		farming.sproutActive = false
 		farming.__sproutStartTime = tick()
@@ -1474,21 +1466,26 @@ function farming.farm(...)
 
 	-- Conversion owns the character while a hive balloon is being collected.
 	-- Do not let any queued farm() call start a competing field route.
-	if status == true and isBalloonWaitActive() then
+	if status == true and farming.__waitingForBalloon == true then
 		return
 	end
-	
+
 	if farming.__goingToHive
 		and actives["convert"] ~= true
 		and not (mod.convert and (mod.convert.__running or mod.convert.__retryScheduled)) then
 		warn("[farming] stale __goingToHive detected, resetting to false")
 		farming.__goingToHive = false
 	end
-	
+
+	warn("[farm-call] goingToHive=", farming.__goingToHive,
+		"convert=", actives["convert"],
+		"running=", mod.convert and mod.convert.__running,
+		"retrySched=", mod.convert and mod.convert.__retryScheduled,
+		"farmingActive=", farmingActive,
+		"fieldRoute=", farming.__fieldRouteInProgress)
 
 	if not status then
 		farming.__waitingForBalloon = false
-		env.__NECTAR_BALLOON_WAITING = false
 		-- Invalidate any pending return-to-field movement when AutoFarm is disabled.
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -1533,7 +1530,7 @@ function farming.farm(...)
 	if farmingActive then
 		return
 	end
-	
+
 	if not actives["sprout"]
 		and (farming.__pendingSprout or farming.sproutActive or farming.__sproutOrigField) then
 		farming.sproutActive = false
@@ -1705,7 +1702,7 @@ function farming.farm(...)
 					break
 				end
 
-				if farming.__goingToHive or isBalloonWaitActive() or actives["convert"] == true or (mod.convert and mod.convert.__running) then
+				if farming.__goingToHive or farming.__waitingForBalloon == true or actives["convert"] == true or (mod.convert and mod.convert.__running) then
 					actives["move"] = false
 					task.wait(0.25)
 					continue
@@ -1721,7 +1718,7 @@ function farming.farm(...)
 				-- [FIX 1] Backpack-threshold hive trip: quickHive вместо currentPos + moveWithTimeout
 				local quickInfo = mod.convert.get_pollen_info()
 				local quickThr = tonumber(actives["backpack"]) or 80
-				if quickInfo and quickInfo.percent >= quickThr and quickInfo.pollen > 0 then
+				if quickInfo and quickInfo.pollen > 0 and (quickInfo.percent >= quickThr or quickInfo.overflow) then
 					local now = tick()
 					if mod.convert and mod.convert.__failedAt and (now - mod.convert.__failedAt) < 30 then
 						task.wait(1)
@@ -2013,7 +2010,7 @@ function farming.farm(...)
 				local intervalMinutes = tonumber(actives["convert_interval"]) or 15
 				local interval = intervalMinutes * 60
 
-				local byBackpack = info and info.percent >= threshold and info.pollen > 0
+				local byBackpack = info and info.pollen > 0 and (info.percent >= threshold or info.overflow)
 				local byTime = info and info.pollen > 0 and (tick() - lastConvertTime) >= interval
 
 				if byBackpack or byTime then
@@ -2112,7 +2109,7 @@ function farming.farm(...)
 		end
 		return
 	end
-	
+
 	if farming.__pendingPuff and farming.__pendingPuff.Parent then
 		if not farmingActive then
 			task.spawn(metod)
@@ -2134,7 +2131,7 @@ function farming.farm(...)
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		local routeId = farming.__fieldRouteId
 		farming.__fieldRouteInProgress = true
-		warn("[farming] returning to field:", tostring(actives["field"]))
+		--warn("[farming] returning to field:", tostring(actives["field"]))
 
 		moveWithTimeout("go_to_field", walkspeed, field, function()
 			if routeId ~= farming.__fieldRouteId then return end
@@ -2143,7 +2140,7 @@ function farming.farm(...)
 			if not actives["auto_farm"] then
 				return
 			end
-			warn("[farming] reached field; resuming AutoFarm")
+			--warn("[farming] reached field; resuming AutoFarm")
 			if not farmingActive then
 				task.spawn(metod)
 			end
@@ -2174,7 +2171,7 @@ function farming.farm(...)
 	end
 end
 
-print(1111)
+print(4444)
 
 task.spawn(function()
 	task.wait(2)
@@ -2211,7 +2208,6 @@ local function respawn(...)
 		farming.__puffId = (farming.__puffId or 0) + 1
 		farming.__goingToHive = nil
 		farming.__waitingForBalloon = false
-		env.__NECTAR_BALLOON_WAITING = false
 		farming.__forceFieldReturn = nil
 		farming.__fieldRouteId = (farming.__fieldRouteId or 0) + 1
 		farming.__fieldRouteInProgress = false
@@ -2272,13 +2268,13 @@ task.spawn(function()
 
 		if staleHiveLock then
 			farming.__goingToHive = false
-			warn("[farming] watchdog: stale __goingToHive cleared")
+			--warn("[farming] watchdog: stale __goingToHive cleared")
 		end
 
 		local should_check = actives["auto_farm"] == true
 			and not farmingActive
 			and not farming.__goingToHive
-			and not isBalloonWaitActive()
+			and not farming.__waitingForBalloon
 			and not farming.__fieldRouteInProgress
 			and not actives["convert"]
 
@@ -2295,7 +2291,12 @@ task.spawn(function()
 					if moved < 3 then
 						farming.__watchdogStuck = (farming.__watchdogStuck or 0) + 1
 						if farming.__watchdogStuck >= 4 then
-							warn("[farming] watchdog: bot stuck for 20s, restarting farm")
+							--warn("[farming] watchdog: bot stuck for 20s, restarting farm")
+							--warn("[watchdog-state] running=", farmingActive,
+							--	"sprout=", farming.sproutActive,
+							--	"puff=", farming.puffActive,
+							--	"pendingS=", farming.__pendingSprout ~= nil,
+							--	"pendingP=", farming.__pendingPuff ~= nil)
 							farming.__watchdogStuck = 0
 							farming.__watchdogPos = nil
 							if farming.farm then farming.farm() end
