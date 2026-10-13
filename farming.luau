@@ -1477,12 +1477,6 @@ function farming.farm(...)
 		farming.__goingToHive = false
 	end
 
-	warn("[farm-call] goingToHive=", farming.__goingToHive,
-		"convert=", actives["convert"],
-		"running=", mod.convert and mod.convert.__running,
-		"retrySched=", mod.convert and mod.convert.__retryScheduled,
-		"farmingActive=", farmingActive,
-		"fieldRoute=", farming.__fieldRouteInProgress)
 
 	if not status then
 		farming.__waitingForBalloon = false
@@ -2171,7 +2165,7 @@ function farming.farm(...)
 	end
 end
 
-print(4444)
+print(123123123123)
 
 task.spawn(function()
 	task.wait(2)
