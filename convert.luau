@@ -314,10 +314,18 @@ function convert.get_pollen_info()
 
 	if max <= 0 then return nil end
 
+	-- Защита от переполнения: pollen может быть больше max.
+	-- Реальное значение pollen возвращаем как есть (по нему считается таймаут),
+	-- а percent капаем сверху на 100, чтобы пороги работали предсказуемо.
+	local percent = (current / max) * 100
+	if percent > 100 then percent = 100 end
+	if percent < 0 then percent = 0 end
+
 	return {
 		pollen = current,
 		max = max,
-		percent = (current / max) * 100,
+		percent = percent,
+		overflow = current > max,   -- флаг для отладки/логов
 	}
 end
 
@@ -356,23 +364,19 @@ function convert.convert(...)
 
 	local function getPollen()
 		local info = convert.get_pollen_info()
-		if info and type(info.pollen) == "number" then
+		if info and type(info.pollen) == "number" and info.pollen >= 0 then
 			return info.pollen
 		end
 
 		local coreStats = find.player:FindFirstChild("CoreStats")
 		local pollen = coreStats and coreStats:FindFirstChild("Pollen")
 		if pollen and (pollen:IsA("NumberValue") or pollen:IsA("IntValue")) then
-			return pollen.Value
-		end
-		
-		for _, obj in ipairs(find.player:GetDescendants()) do
-			if obj.Name == "Pollen" and (obj:IsA("NumberValue") or obj:IsA("IntValue")) then
-				return obj.Value
+			local v = pollen.Value
+			if type(v) == "number" and v >= 0 then
+				return v
 			end
 		end
 
-		warn("convert getPollen() failed")
 		return nil
 	end
 
@@ -819,12 +823,20 @@ function convert.convert(...)
 	end)
 
 	-- One polling loop per conversion. A successful conversion is confirmed by
-	-- the backpack meter reaching zero and staying there briefly; balloon popping
-	-- is deliberately not a prerequisite for returning to the field.
+	-- the backpack meter reaching zero and staying there briefly.
 	task.spawn(function()
 		local startTime = tick()
 		local zeroSince = nil
-		local timeout = 300
+		local baseTimeout = 300
+
+		-- Если pollen был больше max (переполнение), конвертация идёт дольше.
+		-- Растягиваем таймаут пропорционально переполнению, но не больше 600 секунд.
+		local beforeInfo = convert.get_pollen_info()
+		local overflowFactor = 1
+		if beforeInfo and beforeInfo.max > 0 and beforeInfo.pollen > beforeInfo.max then
+			overflowFactor = beforeInfo.pollen / beforeInfo.max
+		end
+		local timeout = math.clamp(baseTimeout * overflowFactor, baseTimeout, 600)
 
 		while currentJob() and not finished do
 			if actives["auto_farm"] ~= true then
@@ -854,7 +866,7 @@ function convert.convert(...)
 
 	return true
 end
-print(4444)
+print(44444444)
 
 function convert.equip_mask(name)
 	--print(2)
