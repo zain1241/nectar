@@ -420,18 +420,35 @@ function convert.convert(...)
 		return nil
 	end
 
+	-- HiveBalloonInstance в карте может быть Folder, а не Model.
+	-- Поэтому ищем BalloonRoot/BalloonBody рекурсивно внутри контейнера.
+	local function getBalloonPosition(obj)
+		if not obj then return nil end
+		if obj:IsA("BasePart") then return obj.Position end
+
+		local root = obj:FindFirstChild("BalloonRoot", true)
+		if not root and obj:IsA("Model") then
+			root = obj.PrimaryPart
+		end
+		if not root then root = obj:FindFirstChild("BalloonBody", true) end
+		if not root then root = obj:FindFirstChildWhichIsA("BasePart", true) end
+
+		if root and root:IsA("BasePart") then return root.Position end
+		if root and root:IsA("Attachment") then return root.WorldPosition end
+		return nil
+	end
+
 	-- Проверяет шарик рядом с МОИМ ульем (не рядом с игроком!)
 	local function hasHiveBalloon()
 		local balloons = workspace:FindFirstChild("Balloons")
-		if not balloons then return false end
-		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+		local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
 		local hive = getMyHive()
 		if not hive then
-			-- без своего улья — считаем по любому
+			-- Если улей ещё не определился, проверяем наличие любого balloon-контейнера.
 			for _, obj in ipairs(hiveBalloons:GetChildren()) do
-				if obj:IsA("Model") or obj:IsA("BasePart") then return true end
+				if getBalloonPosition(obj) then return true end
 			end
 			return false
 		end
@@ -448,22 +465,13 @@ function convert.convert(...)
 		if not hivePos then return false end
 
 		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			if obj:IsA("Model") or obj:IsA("BasePart") then
-				local pos
-				if obj:IsA("Model") then
-					local root = obj:FindFirstChild("BalloonRoot") or obj.PrimaryPart
-					if not root then root = obj:FindFirstChildWhichIsA("BasePart", true) end
-					pos = root and root.Position
-				else
-					pos = obj.Position
-				end
-				if pos then
-					-- BalloonRoot may be high above the hive; compare XZ only.
-					local dx = pos.X - hivePos.X
-					local dz = pos.Z - hivePos.Z
-					if math.sqrt(dx * dx + dz * dz) <= 20 then
-						return true
-					end
+			local pos = getBalloonPosition(obj)
+			if pos then
+				-- BalloonRoot is high above the hive, so use horizontal distance only.
+				local dx = pos.X - hivePos.X
+				local dz = pos.Z - hivePos.Z
+				if math.sqrt(dx * dx + dz * dz) <= 20 then
+					return true
 				end
 			end
 		end
@@ -473,34 +481,20 @@ function convert.convert(...)
 	-- Горизонтальная дистанция (без Y) — шарик висит высоко над ульем
 	local function hasBalloonNearPlayer(radius)
 		radius = tonumber(radius) or 30
-
 		local character = find.player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		if not root then return false end
-
 		local balloons = workspace:FindFirstChild("Balloons")
-		if not balloons then return false end
-		local hiveBalloons = balloons:FindFirstChild("HiveBalloons")
+		local hiveBalloons = balloons and balloons:FindFirstChild("HiveBalloons")
 		if not hiveBalloons then return false end
 
 		local pp = root.Position
 		for _, obj in ipairs(hiveBalloons:GetChildren()) do
-			if obj:IsA("Model") or obj:IsA("BasePart") then
-				local pos
-				if obj:IsA("Model") then
-					local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-					pos = part and part.Position
-				else
-					pos = obj.Position
-				end
-				-- Внутри for _, obj:
-				if pos then
-					local dx = pos.X - pp.X
-					local dz = pos.Z - pp.Z
-					local horiz = math.sqrt(dx*dx + dz*dz)
-					warn(("[balloon-debug] %s horiz=%.1f y=%.1f"):format(obj.Name, horiz, pos.Y - pp.Y))
-					if horiz <= radius then return true end
-				end
+			local pos = getBalloonPosition(obj)
+			if pos then
+				local dx = pos.X - pp.X
+				local dz = pos.Z - pp.Z
+				if math.sqrt(dx * dx + dz * dz) <= radius then return true end
 			end
 		end
 		return false
@@ -866,7 +860,7 @@ function convert.convert(...)
 
 	return true
 end
-print(44444444)
+print(123123123123)
 
 function convert.equip_mask(name)
 	--print(2)
